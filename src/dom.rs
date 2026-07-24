@@ -58,6 +58,7 @@ pub enum DomError {
     NotAChild,
     WouldCycle,
     NotAnElement,
+    NotTextual,
 }
 
 impl fmt::Display for DomError {
@@ -68,6 +69,7 @@ impl fmt::Display for DomError {
                 write!(f, "inserting a node inside itself would create a cycle")
             }
             DomError::NotAnElement => write!(f, "operation requires an element node"),
+            DomError::NotTextual => write!(f, "operation requires a text or comment node"),
         }
     }
 }
@@ -239,6 +241,19 @@ impl Dom {
                 Ok(pos.map(|i| attrs.remove(i).1))
             }
             _ => Err(DomError::NotAnElement),
+        }
+    }
+
+    // --- text ---
+
+    /// Replace the contents of a text or comment node.
+    pub fn set_text(&mut self, id: NodeId, text: &str) -> Result<(), DomError> {
+        match &mut self.nodes[id].data {
+            NodeData::Text { contents } | NodeData::Comment { contents } => {
+                *contents = text.to_string();
+                Ok(())
+            }
+            _ => Err(DomError::NotTextual),
         }
     }
 

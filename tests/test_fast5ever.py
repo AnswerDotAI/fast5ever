@@ -2,7 +2,7 @@
 algorithm's spelling (what a browser's innerHTML produces), since fast5ever
 serializes with html5ever's own serializer."""
 import pytest
-from fast5ever import Node, parse, parse_fragment
+from fast5ever import Comment, Doctype, Document, Element, Node, Text, parse, parse_fragment
 
 
 def test_document_roundtrip():
@@ -10,8 +10,7 @@ def test_document_roundtrip():
     assert parse(src).to_html() == src
 
 
-def test_document_completion():
-    assert parse('<p>hi').to_html() == '<html><head></head><body><p>hi</p></body></html>'
+def test_document_completion(): assert parse('<p>hi').to_html() == '<html><head></head><body><p>hi</p></body></html>'
 
 
 def test_fragment():
@@ -70,7 +69,7 @@ def test_navigation():
     div = frag.children[0]
     assert div.name == 'div'
     assert div.attrs == {'id': 'd', 'class': 'c'}
-    assert div.get_attr('id') == 'd' and div.get_attr('missing') is None
+    assert div.attrs.get('id') == 'd' and div.attrs.get('missing') is None
     span, tail = div.children
     assert span.name == 'span'
     assert tail.name == '#text' and tail.text == 'tail' and tail.attrs == {}
@@ -79,26 +78,28 @@ def test_navigation():
     assert div != span and div == frag.children[0] and div != 'div'
 
 
-def test_to_text():
-    assert parse_fragment('<p>a<b>b</b></p><p>c</p>').to_text() == 'abc'
+def test_to_text(): assert parse_fragment('<p>a<b>b</b></p><p>c</p>').to_text() == 'abc'
 
 
 def test_repr():
-    frag = parse_fragment('<em>x</em>')
-    assert repr(frag) == '<Node #document>'
-    assert repr(frag.children[0]) == '<Node em>'
+    frag = parse_fragment('<em>x</em>tail')
+    assert repr(frag) == '<Document>'
+    assert repr(frag.children[0]) == '<Element em>'
+    assert repr(frag.children[1]) == "<Text 'tail'>"
 
 
 def test_attr_mutation():
     frag = parse_fragment('<p id="a">x</p>')
-    p = frag.children[0]
-    p.set_attr('id', 'b')
-    p.set_attr('class', 'c')
-    assert frag.to_html() == '<p id="b" class="c">x</p>'
-    assert p.del_attr('id') == 'b' and p.del_attr('id') is None
+    a = frag.children[0].attrs
+    a['id'] = 'b'
+    a['class'] = 'c'
+    assert frag.to_html() == '<p id="b" class="c">x</p>'  # writes go straight to the tree
+    del a['id']
     assert frag.to_html() == '<p class="c">x</p>'
-    with pytest.raises(ValueError):
-        frag.set_attr('id', 'x')  # document is not an element
+    assert 'class' in a and 'id' not in a
+    assert a['class'] == 'c' and a.get('id') is None and a.get('id', 'z') == 'z'
+    with pytest.raises(KeyError): a['id']
+    with pytest.raises(KeyError): del a['id']
 
 
 def test_structure_mutation():
@@ -140,8 +141,7 @@ def test_cross_tree_copy():
 def test_cycle_rejected():
     frag = parse_fragment('<div><span>s</span></div>')
     div = frag.children[0]
-    with pytest.raises(ValueError):
-        div.children[0].append_child(div)
+    with pytest.raises(ValueError): div.children[0].append_child(div)
 
 
 def test_template():
@@ -162,3 +162,64 @@ def test_depth_cap():
     # sibling runs of implicitly-self-closing elements are not depth
     flat = parse_fragment('<p>a' * 600)
     assert flat.to_html().count('<p>') == 600
+
+
+def test_node_classes():
+    frag = parse_fragment('<p id="x">hi<!-- c --></p>')
+    p = frag.children[0]
+    text, comment = p.children
+    assert isinstance(frag, Document) and isinstance(p, Element)
+    assert isinstance(text, Text) and isinstance(comment, Comment)
+    assert all(isinstance(n, Node) for n in (frag, p, text, comment))
+    assert not isinstance(text, Element) and not isinstance(p, Text)
+    doc = parse('<!DOCTYPE html><p>x')
+    assert isinstance(doc.children[0], Doctype)
+
+
+def test_node_construction():
+    div = Element('div', {'id': 'd'})
+    assert isinstance(div, Element) and div.parent is None
+    div.append_child(Text('hi '))
+    b = Element('b')
+    b.append_child(Text('there'))
+    div.append_child(b)
+    div.append_child(Comment('note'))
+    assert div.to_html() == '<div id="d">hi <b>there</b><!--note--></div>'
+
+
+def test_text_mutation():
+    frag = parse_fragment('<p>old</p><!-- c -->')
+    frag.children[0].children[0].text = 'new'
+    frag.children[1].text = ' d '
+    assert frag.to_html() == '<p>new</p><!-- d -->'
+    with pytest.raises(ValueError): frag.children[0].text = 'x'  # an element has no settable text
+
+
+def test_template_content():
+    frag = parse_fragment('<template><p>t</p></template><p>n</p>')
+    tpl = frag.children[0]
+    assert tpl.children == []  # contents live outside the child list
+    content = tpl.content
+    assert isinstance(content, Document) and content.to_html() == '<p>t</p>'
+    content.children[0].attrs['id'] = 'i'
+    assert frag.to_html() == '<template><p id="i">t</p></template><p>n</p>'
+    assert frag.children[1].content is None
+
+
+def test_attrs_iteration_and_update():
+    a = parse_fragment('<p id="a" class="c">x</p>').children[0].attrs
+    assert list(a) == ['id', 'class'] and a.keys() == ['id', 'class']
+    assert a.values() == ['a', 'c'] and a.items() == [('id', 'a'), ('class', 'c')]
+    assert dict(a) == {'id': 'a', 'class': 'c'} and repr(a) == "{'id': 'a', 'class': 'c'}"
+    a.update({'class': 'k', 'data-x': 'y'})
+    assert a == {'id': 'a', 'class': 'k', 'data-x': 'y'}
+    assert a.pop('data-x') == 'y' and a.pop('data-x', None) is None
+    with pytest.raises(KeyError): a.pop('data-x')
+
+
+def test_attrs_non_element():
+    frag = parse_fragment('x')
+    t = frag.children[0]
+    assert t.attrs == {} and len(t.attrs) == 0 and t.attrs.get('k') is None
+    for node in (t, frag):
+        with pytest.raises(ValueError): node.attrs['k'] = 'v'

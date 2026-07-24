@@ -21,11 +21,32 @@ doc.to_html()                         # '<!DOCTYPE html><html><head><title>t'...
 - `Node` is a lightweight handle: `.name` (tag, or `#document`/`#text`/`#comment`/`#doctype`), `.attrs` (dict snapshot in source order), `.text` (own content for text/comments), `.children`, `.parent`, `to_html()`, `to_text()`.
 - Mutation: `set_attr`/`del_attr`/`get_attr`, `append_child`, `insert_before(child, reference)`, `replace_child(new, old)`, `detach()`. Inserting a `#document` node splices its children in (DocumentFragment semantics), so `div.replace_child(parse_fragment(markup), old)` splices markup in place. Inserting a node from another tree deep-copies it; handles stay valid across all mutations.
 
+The node API follows the WHATWG DOM's vocabulary, with a pythonic surface (`to_html()`, `to_text()`, attrs as a dict) modeled on Emil Stenström's [JustHTML](https://github.com/EmilStenstrom/justhtml). The parsing and serialization engine is Servo's [html5ever](https://github.com/servo/html5ever).
+
 ## Serialization is the spec's
 
 Output spelling comes from html5ever's own serializer - the WHATWG serialization algorithm, byte-for-byte what Chrome's `innerHTML` builds: boolean attributes as `open=""`, double-quoted values, voids without `/`, raw text unescaped inside `script`/`style`. fast5ever adds no styling options and no compatibility shims with other serializers, by design.
 
 Parsing is also bounded Chromium-style: element nesting beyond 512 flattens at the cap (Chromium's own limit), which keeps adversarially deep input linear-time - html5ever's tree builder alone is quadratic there.
+
+## The Rust API
+
+fast5ever is a Rust crate first (`fast5ever = { git = "https://github.com/AnswerDotAI/fast5ever" }`); the Python API is a thin binding over it, so the two surfaces match verb for verb. The one structural difference: Rust has no node objects - you hold the `Dom` (a `Vec`-indexed arena) and address nodes by `NodeId`, with node 0 (`DOCUMENT`) always the document. Every id stays valid for the life of the `Dom`, however the tree is mutated.
+
+```rust
+use fast5ever::{parse_fragment, DOCUMENT};
+
+let mut dom = parse_fragment("<p>one<p>two", "body");
+let p = dom.children(DOCUMENT)[0];
+dom.set_attr(p, "class", "lead").unwrap();
+let extra = parse_fragment("<b>!</b>", "body");
+let extra = dom.import(&extra, DOCUMENT);   // cross-tree moves go through an explicit import
+dom.append_child(p, extra).unwrap();        // a document node splices its children, as in Python
+assert_eq!(dom.to_html(DOCUMENT), r#"<p class="lead">one<b>!</b></p><p>two</p>"#);
+```
+
+Reads mirror the Python names (`children`, `parent`, `attr`, `to_html`, `to_text`); writes return `Result` where Python raises (`set_attr`, `append_child`, `insert_before`, `replace_child`, `detach`); and Rust additionally exposes node construction (`create_element`, `create_text`, `create_comment`) and `NodeData` matching for direct tree inspection.
+
 
 ## Development
 

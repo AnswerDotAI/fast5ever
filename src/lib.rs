@@ -1,17 +1,11 @@
-pub fn hello(name: &str) -> String {
-    format!("Hello, {name}!")
-}
+//! fast5ever: WHATWG-compliant HTML parsing, mutation, and serialization,
+//! powered by html5ever. The output spelling is the engine's serializer,
+//! exactly as the WHATWG algorithm (and a browser's `innerHTML`) spells it.
 
-use pyo3::prelude::*;
+mod depth;
+mod dom;
+#[cfg(feature = "python")]
+mod python;
 
-#[pyfunction(name = "hello")]
-fn py_hello(name: &str) -> String {
-    hello(name)
-}
-
-#[pymodule]
-fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(py_hello, m)?)?;
-    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    Ok(())
-}
+pub use depth::MAX_DEPTH;
+pub use dom::{parse, parse_fragment, Dom, DomError, Node, NodeData, NodeId, DOCUMENT};

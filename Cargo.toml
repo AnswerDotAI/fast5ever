@@ -10,7 +10,12 @@ name = "fast5ever"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = ">=0.28"
+html5ever = "0.39.0"
+pyo3 = { version = ">=0.28", optional = true }
 
 [features]
-extension-module = ["pyo3/extension-module"]
+python = ["dep:pyo3"]
+extension-module = ["python", "pyo3/extension-module"]
+
+[lints.clippy]
+too_many_arguments = "allow"

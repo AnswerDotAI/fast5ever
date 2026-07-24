@@ -1,0 +1,35 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "fast5ever"
+dynamic = ["version"]
+description = "WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's html5ever"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+readme = "README.md"
+authors = [{name = "Jeremy Howard", email = "github@jhoward.fastmail.fm"}]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[project.optional-dependencies]
+dev = ["fastship>=0.0.11", "maturin>=1.0,<2.0", "pytest"]
+
+[project.urls]
+Homepage = "https://github.com/AnswerDotAI/fast5ever"
+Repository = "https://github.com/AnswerDotAI/fast5ever"
+Issues = "https://github.com/AnswerDotAI/fast5ever/issues"
+
+[tool.maturin]
+features = ["extension-module"]
+python-source = "python"
+module-name = "fast5ever._core"
+
+[tool.fastship]
+branch = "main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

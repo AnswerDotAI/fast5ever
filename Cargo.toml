@@ -1,0 +1,16 @@
+[package]
+name = "fast5ever"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's html5ever"
+
+[lib]
+name = "fast5ever"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = ">=0.28"
+
+[features]
+extension-module = ["pyo3/extension-module"]

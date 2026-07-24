@@ -1,6 +1,6 @@
 [package]
 name = "fast5ever"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "Apache-2.0"
 description = "WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's html5ever"

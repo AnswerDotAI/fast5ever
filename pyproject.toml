@@ -31,5 +31,8 @@ module-name = "fast5ever._core"
 [tool.fastship]
 branch = "main"
 
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.rs" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

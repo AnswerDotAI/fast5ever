@@ -223,3 +223,12 @@ def test_attrs_non_element():
     assert t.attrs == {} and len(t.attrs) == 0 and t.attrs.get('k') is None
     for node in (t, frag):
         with pytest.raises(ValueError): node.attrs['k'] = 'v'
+
+
+def test_rename():
+    frag = parse_fragment('<div class="details" open=""><h2 id="x">L</h2>body</div>')
+    div = frag.children[0]
+    div.name = 'details'
+    div.children[0].name = 'summary'
+    assert frag.to_html() == '<details class="details" open=""><summary id="x">L</summary>body</details>'
+    with pytest.raises(ValueError): frag.children[0].children[1].name = 'p'  # text nodes have no settable name

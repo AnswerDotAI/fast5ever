@@ -244,6 +244,17 @@ impl Dom {
         }
     }
 
+    /// Rename an element in place, keeping its attributes and children.
+    pub fn rename(&mut self, id: NodeId, name: &str) -> Result<(), DomError> {
+        match &mut self.nodes[id].data {
+            NodeData::Element { name: n, .. } => {
+                *n = QualName::new(None, ns!(html), LocalName::from(name));
+                Ok(())
+            }
+            _ => Err(DomError::NotAnElement),
+        }
+    }
+
     // --- text ---
 
     /// Replace the contents of a text or comment node.

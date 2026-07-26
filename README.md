@@ -19,7 +19,7 @@ doc.to_html()                         # '<!DOCTYPE html><html><head><title>t'...
 ## API
 
 - `parse(html)` parses a complete document; `parse_fragment(html, context='body')` parses a fragment in a context element (pass e.g. `context='tbody'` to parse table rows). Both return a `Document` node.
-- Every node is a `Document`, `Element`, `Text`, `Comment`, or `Doctype` - all subclasses of `Node` - so kind checks are `isinstance(c, Text)`. Shared surface: `.name` (tag, or `#document`/`#text`/`#comment`/`#doctype`), `.children`, `.parent`, `to_html()`, `to_text()`.
+- Every node is a `Document`, `Element`, `Text`, `Comment`, or `Doctype` - all subclasses of `Node` - so kind checks are `isinstance(c, Text)`. Shared surface: `.name` (tag, or `#document`/`#text`/`#comment`/`#doctype`; writable on elements — `el.name = 'details'` renames in place, keeping attributes and children), `.children`, `.parent`, `to_html()`, `to_text()`.
 - `el.attrs` is a live mapping in source order: `attrs['k']`, `attrs['k'] = v`, `del attrs['k']`, `in`/`len`/iteration, `get`/`keys`/`values`/`items`/`update`/`pop`, `== {...}` against any mapping; `dict(attrs)` snapshots. (Non-elements read as empty and refuse writes.)
 - `.text` is a text or comment node's own content, writable: `t.text = 'new'`. `template.content` is a `<template>` element's contents as a `Document`.
 - `Element(name, attrs=None)`, `Text(text)`, and `Comment(text)` construct detached nodes to insert.

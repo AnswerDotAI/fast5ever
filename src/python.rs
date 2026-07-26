@@ -116,6 +116,13 @@ impl Node {
         }
     }
 
+    /// Rename the element in place (`el.name = "details"`), keeping its
+    /// attributes and children; raises for non-elements.
+    #[setter]
+    fn set_name(&self, value: &str) -> PyResult<()> {
+        Ok(self.dom.write().unwrap().rename(self.id, value)?)
+    }
+
     /// The element's attributes as a live mapping: reads see the tree as it
     /// is, and `attrs[k] = v` / `del attrs[k]` write straight through.
     /// Empty and read-only for non-elements.

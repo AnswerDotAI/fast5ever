@@ -63,12 +63,11 @@ All tests are pytest; `cargo check`/`cargo clippy` stay warning-free and need no
 
 ## Release
 
-Release flow is: release first, then bump.
+Release flow: tag-push (CI publishes), then the version bump, all in one command.
 
 ```bash
 maturin develop && pytest -q
-ship-rs-release
-ship-bump
+ship-release
 ```
 
 The GitHub workflow builds wheels on tags matching `v*` and publishes them to GitHub Releases and PyPI.

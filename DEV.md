@@ -13,9 +13,8 @@ The canonical version lives in `Cargo.toml`. `pyproject.toml` gets the Python pa
 
 ## Release
 
-Release flow is: release first, then bump.
+Release flow is: release first, then bump - `ship-release` does both.
 
 1. Run `maturin develop && pytest -q`.
 2. Confirm the release version in `Cargo.toml` (`[package].version`).
-3. Run `ship-rs-release`.
-4. After pushing the release tag, run `ship-bump`, commit the `Cargo.toml` version bump, and push to `main` without a tag.
+3. Run `ship-release`. It tags `v<version>`, pushes branch and tag (CI builds and publishes), then bumps `Cargo.toml`, refreshes the editable install, and pushes the bump without a tag.

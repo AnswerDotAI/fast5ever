@@ -32,7 +32,7 @@ module-name = "fast5ever._core"
 branch = "main"
 
 [tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.rs" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.rs" }, { file = "Cargo.toml" }, { file = ".git/fastws-cargo-key" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -128,10 +128,7 @@ impl Node {
     /// Empty and read-only for non-elements.
     #[getter]
     fn attrs(&self) -> Attrs {
-        Attrs {
-            dom: self.dom.clone(),
-            id: self.id,
-        }
+        Attrs { dom: self.dom.clone(), id: self.id }
     }
 
     /// Element namespace URL for non-HTML elements (SVG/MathML); `None` for
@@ -139,9 +136,7 @@ impl Node {
     #[getter]
     fn namespace(&self) -> Option<String> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { name, .. } if *name.ns != *"http://www.w3.org/1999/xhtml" => {
-                Some(name.ns.to_string())
-            }
+            NodeData::Element { name, .. } if *name.ns != *"http://www.w3.org/1999/xhtml" => Some(name.ns.to_string()),
             _ => None,
         }
     }
@@ -164,9 +159,7 @@ impl Node {
     #[getter]
     fn children(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let ids = self.dom.read().unwrap().children(self.id).to_vec();
-        ids.into_iter()
-            .map(|c| make_node(py, self.dom.clone(), c))
-            .collect()
+        ids.into_iter().map(|c| make_node(py, self.dom.clone(), c)).collect()
     }
 
     #[getter]
@@ -180,10 +173,7 @@ impl Node {
     #[getter]
     fn content(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let t = match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element {
-                template_contents: Some(t),
-                ..
-            } => Some(*t),
+            NodeData::Element { template_contents: Some(t), .. } => Some(*t),
             _ => None,
         };
         t.map(|t| make_node(py, self.dom.clone(), t)).transpose()
@@ -215,10 +205,7 @@ impl Node {
     fn insert_before(&self, child: &Node, reference: Option<&Node>) -> PyResult<()> {
         let id = self.local_id(child);
         let reference = reference.map(|r| r.id);
-        self.dom
-            .write()
-            .unwrap()
-            .insert_before(self.id, id, reference)?;
+        self.dom.write().unwrap().insert_before(self.id, id, reference)?;
         Ok(())
     }
 
@@ -226,10 +213,7 @@ impl Node {
     /// detached but its handle stays usable.
     fn replace_child(&self, new: &Node, old: &Node) -> PyResult<()> {
         let id = self.local_id(new);
-        self.dom
-            .write()
-            .unwrap()
-            .replace_child(self.id, id, old.id)?;
+        self.dom.write().unwrap().replace_child(self.id, id, old.id)?;
         Ok(())
     }
 
@@ -262,10 +246,7 @@ impl Node {
 
 /// A detached node in a fresh single-node arena, for the constructors.
 fn detached(dom: Dom, id: NodeId) -> Node {
-    Node {
-        dom: Arc::new(RwLock::new(dom)),
-        id,
-    }
+    Node { dom: Arc::new(RwLock::new(dom)), id }
 }
 
 #[pymethods]
@@ -328,12 +309,7 @@ impl Attrs {
 #[pymethods]
 impl Attrs {
     fn __getitem__(&self, key: &str) -> PyResult<String> {
-        self.dom
-            .read()
-            .unwrap()
-            .attr(self.id, key)
-            .map(str::to_string)
-            .ok_or_else(|| PyKeyError::new_err(key.to_string()))
+        self.dom.read().unwrap().attr(self.id, key).map(str::to_string).ok_or_else(|| PyKeyError::new_err(key.to_string()))
     }
 
     fn __setitem__(&self, key: &str, value: &str) -> PyResult<()> {
@@ -364,9 +340,7 @@ impl Attrs {
 
     fn keys(&self) -> Vec<String> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => {
-                attrs.iter().map(|(n, _)| n.local.to_string()).collect()
-            }
+            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, _)| n.local.to_string()).collect(),
             _ => Vec::new(),
         }
     }
@@ -380,10 +354,7 @@ impl Attrs {
 
     fn items(&self) -> Vec<(String, String)> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => attrs
-                .iter()
-                .map(|(n, v)| (n.local.to_string(), v.clone()))
-                .collect(),
+            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, v)| (n.local.to_string(), v.clone())).collect(),
             _ => Vec::new(),
         }
     }
@@ -430,14 +401,7 @@ impl Attrs {
 #[pyfunction]
 fn parse(py: Python<'_>, html: &str) -> PyResult<Py<Document>> {
     let dom = Arc::new(RwLock::new(crate::dom::parse(html)));
-    Py::new(
-        py,
-        PyClassInitializer::from(Node {
-            dom,
-            id: crate::dom::DOCUMENT,
-        })
-        .add_subclass(Document),
-    )
+    Py::new(py, PyClassInitializer::from(Node { dom, id: crate::dom::DOCUMENT }).add_subclass(Document))
 }
 
 /// Parse a fragment as the children of a `context` element (default `body`,
@@ -447,14 +411,7 @@ fn parse(py: Python<'_>, html: &str) -> PyResult<Py<Document>> {
 #[pyo3(signature = (html, context="body"))]
 fn parse_fragment(py: Python<'_>, html: &str, context: &str) -> PyResult<Py<Document>> {
     let dom = Arc::new(RwLock::new(crate::dom::parse_fragment(html, context)));
-    Py::new(
-        py,
-        PyClassInitializer::from(Node {
-            dom,
-            id: crate::dom::DOCUMENT,
-        })
-        .add_subclass(Document),
-    )
+    Py::new(py, PyClassInitializer::from(Node { dom, id: crate::dom::DOCUMENT }).add_subclass(Document))
 }
 
 #[pymodule]

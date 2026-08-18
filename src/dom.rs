@@ -6,14 +6,14 @@ use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::io;
 
+use html5ever::TokenizerResult;
 use html5ever::buffer_queue::BufferQueue;
 use html5ever::interface::{ElemName, ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::serialize::{Serialize, SerializeOpts, Serializer, TraversalScope};
 use html5ever::tendril::StrTendril;
 use html5ever::tokenizer::{TokenSink, Tokenizer, TokenizerOpts};
 use html5ever::tree_builder::{TreeBuilder, TreeBuilderOpts};
-use html5ever::TokenizerResult;
-use html5ever::{ns, Attribute, LocalName, Namespace, QualName};
+use html5ever::{Attribute, LocalName, Namespace, QualName, ns};
 
 use crate::depth::DepthCap;
 
@@ -23,26 +23,11 @@ pub type NodeId = usize;
 #[derive(Debug, Clone)]
 pub enum NodeData {
     Document,
-    Doctype {
-        name: String,
-        public_id: String,
-        system_id: String,
-    },
-    Text {
-        contents: String,
-    },
-    Comment {
-        contents: String,
-    },
-    Element {
-        name: QualName,
-        attrs: Vec<(QualName, String)>,
-        template_contents: Option<NodeId>,
-    },
-    ProcessingInstruction {
-        target: String,
-        contents: String,
-    },
+    Doctype { name: String, public_id: String, system_id: String },
+    Text { contents: String },
+    Comment { contents: String },
+    Element { name: QualName, attrs: Vec<(QualName, String)>, template_contents: Option<NodeId> },
+    ProcessingInstruction { target: String, contents: String },
 }
 
 #[derive(Debug, Clone)]
@@ -90,14 +75,7 @@ pub const DOCUMENT: NodeId = 0;
 impl Dom {
     /// An empty tree: just a document node.
     pub fn new() -> Dom {
-        Dom {
-            nodes: vec![Node {
-                parent: None,
-                children: Vec::new(),
-                data: NodeData::Document,
-            }],
-            quirks_mode: QuirksMode::NoQuirks,
-        }
+        Dom { nodes: vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }], quirks_mode: QuirksMode::NoQuirks }
     }
 
     pub fn get(&self, id: NodeId) -> &Node {
@@ -127,10 +105,7 @@ impl Dom {
     /// for its (always empty) structural children.
     fn serial_children(&self, id: NodeId) -> &[NodeId] {
         match &self.nodes[id].data {
-            NodeData::Element {
-                template_contents: Some(t),
-                ..
-            } => &self.nodes[*t].children,
+            NodeData::Element { template_contents: Some(t), .. } => &self.nodes[*t].children,
             _ => &self.nodes[id].children,
         }
     }
@@ -138,56 +113,32 @@ impl Dom {
     // --- creation ---
 
     fn push(&mut self, data: NodeData) -> NodeId {
-        self.nodes.push(Node {
-            parent: None,
-            children: Vec::new(),
-            data,
-        });
+        self.nodes.push(Node { parent: None, children: Vec::new(), data });
         self.nodes.len() - 1
     }
 
     /// Create a detached html-namespace element.
     pub fn create_element(&mut self, name: &str, attrs: &[(&str, &str)]) -> NodeId {
         let qual = QualName::new(None, ns!(html), LocalName::from(name));
-        let attrs = attrs
-            .iter()
-            .map(|(n, v)| {
-                (
-                    QualName::new(None, ns!(), LocalName::from(*n)),
-                    v.to_string(),
-                )
-            })
-            .collect();
-        self.push(NodeData::Element {
-            name: qual,
-            attrs,
-            template_contents: None,
-        })
+        let attrs = attrs.iter().map(|(n, v)| (QualName::new(None, ns!(), LocalName::from(*n)), v.to_string())).collect();
+        self.push(NodeData::Element { name: qual, attrs, template_contents: None })
     }
 
     /// Create a detached text node.
     pub fn create_text(&mut self, text: &str) -> NodeId {
-        self.push(NodeData::Text {
-            contents: text.to_string(),
-        })
+        self.push(NodeData::Text { contents: text.to_string() })
     }
 
     /// Create a detached comment node.
     pub fn create_comment(&mut self, text: &str) -> NodeId {
-        self.push(NodeData::Comment {
-            contents: text.to_string(),
-        })
+        self.push(NodeData::Comment { contents: text.to_string() })
     }
 
     /// Deep-copy `id` (and its subtree) from `other` into this arena, returning
     /// the copy's id, detached. The importing side of a cross-tree splice.
     pub fn import(&mut self, other: &Dom, id: NodeId) -> NodeId {
         let data = match &other.nodes[id].data {
-            NodeData::Element {
-                name,
-                attrs,
-                template_contents,
-            } => NodeData::Element {
+            NodeData::Element { name, attrs, template_contents } => NodeData::Element {
                 name: name.clone(),
                 attrs: attrs.clone(),
                 template_contents: template_contents.map(|t| self.import(other, t)),
@@ -207,10 +158,7 @@ impl Dom {
 
     pub fn attr(&self, id: NodeId, name: &str) -> Option<&str> {
         match &self.nodes[id].data {
-            NodeData::Element { attrs, .. } => attrs
-                .iter()
-                .find(|(n, _)| &*n.local == name)
-                .map(|(_, v)| v.as_str()),
+            NodeData::Element { attrs, .. } => attrs.iter().find(|(n, _)| &*n.local == name).map(|(_, v)| v.as_str()),
             _ => None,
         }
     }
@@ -222,10 +170,7 @@ impl Dom {
                 if let Some(slot) = attrs.iter_mut().find(|(n, _)| &*n.local == name) {
                     slot.1 = value.to_string();
                 } else {
-                    attrs.push((
-                        QualName::new(None, ns!(), LocalName::from(name)),
-                        value.to_string(),
-                    ));
+                    attrs.push((QualName::new(None, ns!(), LocalName::from(name)), value.to_string()));
                 }
                 Ok(())
             }
@@ -320,36 +265,21 @@ impl Dom {
 
     /// Insert `child` before `reference` (`None` appends). A document node
     /// splices its children instead (and is left empty).
-    pub fn insert_before(
-        &mut self,
-        parent: NodeId,
-        child: NodeId,
-        reference: Option<NodeId>,
-    ) -> Result<(), DomError> {
-        if self.is_ancestor(child, parent) && !matches!(self.nodes[child].data, NodeData::Document)
-        {
+    pub fn insert_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) -> Result<(), DomError> {
+        if self.is_ancestor(child, parent) && !matches!(self.nodes[child].data, NodeData::Document) {
             return Err(DomError::WouldCycle);
         }
         let ids = self.splice_ids(child);
         let index = match reference {
             None => self.nodes[parent].children.len(),
-            Some(r) => self.nodes[parent]
-                .children
-                .iter()
-                .position(|&c| c == r)
-                .ok_or(DomError::NotAChild)?,
+            Some(r) => self.nodes[parent].children.iter().position(|&c| c == r).ok_or(DomError::NotAChild)?,
         };
         self.insert_ids(parent, index, &ids);
         Ok(())
     }
 
     /// Replace `old` (a child of `parent`) with `new`; `old` is detached.
-    pub fn replace_child(
-        &mut self,
-        parent: NodeId,
-        new: NodeId,
-        old: NodeId,
-    ) -> Result<(), DomError> {
+    pub fn replace_child(&mut self, parent: NodeId, new: NodeId, old: NodeId) -> Result<(), DomError> {
         if new == old {
             return Ok(());
         }
@@ -378,10 +308,7 @@ impl Dom {
         html5ever::serialize::serialize(
             &mut buf,
             &SerNode { dom: self, id },
-            SerializeOpts {
-                traversal_scope: scope,
-                ..Default::default()
-            },
+            SerializeOpts { traversal_scope: scope, ..Default::default() },
         )
         .expect("serializing to a Vec cannot fail");
         String::from_utf8(buf).expect("serializer output is UTF-8")
@@ -411,19 +338,11 @@ struct SerNode<'a> {
 }
 
 impl Serialize for SerNode<'_> {
-    fn serialize<S: Serializer>(
-        &self,
-        serializer: &mut S,
-        traversal_scope: TraversalScope,
-    ) -> io::Result<()> {
+    fn serialize<S: Serializer>(&self, serializer: &mut S, traversal_scope: TraversalScope) -> io::Result<()> {
         let node = &self.dom.nodes[self.id];
         if let TraversalScope::ChildrenOnly(_) = traversal_scope {
             for &child in self.dom.serial_children(self.id) {
-                SerNode {
-                    dom: self.dom,
-                    id: child,
-                }
-                .serialize(serializer, TraversalScope::IncludeNode)?;
+                SerNode { dom: self.dom, id: child }.serialize(serializer, TraversalScope::IncludeNode)?;
             }
             return Ok(());
         }
@@ -431,24 +350,15 @@ impl Serialize for SerNode<'_> {
             NodeData::Element { name, attrs, .. } => {
                 serializer.start_elem(name.clone(), attrs.iter().map(|(n, v)| (n, v.as_str())))?;
                 for &child in self.dom.serial_children(self.id) {
-                    SerNode {
-                        dom: self.dom,
-                        id: child,
-                    }
-                    .serialize(serializer, TraversalScope::IncludeNode)?;
+                    SerNode { dom: self.dom, id: child }.serialize(serializer, TraversalScope::IncludeNode)?;
                 }
                 serializer.end_elem(name.clone())
             }
             NodeData::Text { contents } => serializer.write_text(contents),
             NodeData::Comment { contents } => serializer.write_comment(contents),
             NodeData::Doctype { name, .. } => serializer.write_doctype(name),
-            NodeData::ProcessingInstruction { target, contents } => {
-                serializer.write_processing_instruction(target, contents)
-            }
-            NodeData::Document => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "document nodes serialize children-only",
-            )),
+            NodeData::ProcessingInstruction { target, contents } => serializer.write_processing_instruction(target, contents),
+            NodeData::Document => Err(io::Error::new(io::ErrorKind::InvalidInput, "document nodes serialize children-only")),
         }
     }
 }
@@ -463,22 +373,14 @@ struct Sink {
 impl Sink {
     fn new() -> Sink {
         Sink {
-            nodes: RefCell::new(vec![Node {
-                parent: None,
-                children: Vec::new(),
-                data: NodeData::Document,
-            }]),
+            nodes: RefCell::new(vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }]),
             quirks: Cell::new(QuirksMode::NoQuirks),
         }
     }
 
     fn push(&self, data: NodeData) -> NodeId {
         let mut nodes = self.nodes.borrow_mut();
-        nodes.push(Node {
-            parent: None,
-            children: Vec::new(),
-            data,
-        });
+        nodes.push(Node { parent: None, children: Vec::new(), data });
         nodes.len() - 1
     }
 
@@ -498,9 +400,7 @@ impl Sink {
                 }
             }
         }
-        let id = self.push(NodeData::Text {
-            contents: text.to_string(),
-        });
+        let id = self.push(NodeData::Text { contents: text.to_string() });
         self.append_node(parent, id);
     }
 
@@ -523,11 +423,7 @@ impl Sink {
     fn parent_and_index(&self, sibling: NodeId) -> (NodeId, usize) {
         let nodes = self.nodes.borrow();
         let parent = nodes[sibling].parent.expect("sibling has no parent");
-        let index = nodes[parent]
-            .children
-            .iter()
-            .position(|&c| c == sibling)
-            .expect("sibling not among its parent's children");
+        let index = nodes[parent].children.iter().position(|&c| c == sibling).expect("sibling not among its parent's children");
         (parent, index)
     }
 }
@@ -555,10 +451,7 @@ impl TreeSink for Sink {
     type ElemName<'a> = OwnedElemName;
 
     fn finish(self) -> Dom {
-        Dom {
-            nodes: self.nodes.into_inner(),
-            quirks_mode: self.quirks.get(),
-        }
+        Dom { nodes: self.nodes.into_inner(), quirks_mode: self.quirks.get() }
     }
 
     fn parse_error(&self, _msg: Cow<'static, str>) {}
@@ -569,37 +462,22 @@ impl TreeSink for Sink {
 
     fn elem_name<'a>(&'a self, target: &'a NodeId) -> OwnedElemName {
         match &self.nodes.borrow()[*target].data {
-            NodeData::Element { name, .. } => OwnedElemName {
-                ns: name.ns.clone(),
-                local: name.local.clone(),
-            },
+            NodeData::Element { name, .. } => OwnedElemName { ns: name.ns.clone(), local: name.local.clone() },
             _ => panic!("elem_name called on a non-element node"),
         }
     }
 
     fn create_element(&self, name: QualName, attrs: Vec<Attribute>, flags: ElementFlags) -> NodeId {
         let template_contents = flags.template.then(|| self.push(NodeData::Document));
-        self.push(NodeData::Element {
-            name,
-            attrs: attrs
-                .into_iter()
-                .map(|a| (a.name, a.value.to_string()))
-                .collect(),
-            template_contents,
-        })
+        self.push(NodeData::Element { name, attrs: attrs.into_iter().map(|a| (a.name, a.value.to_string())).collect(), template_contents })
     }
 
     fn create_comment(&self, text: StrTendril) -> NodeId {
-        self.push(NodeData::Comment {
-            contents: text.to_string(),
-        })
+        self.push(NodeData::Comment { contents: text.to_string() })
     }
 
     fn create_pi(&self, target: StrTendril, data: StrTendril) -> NodeId {
-        self.push(NodeData::ProcessingInstruction {
-            target: target.to_string(),
-            contents: data.to_string(),
-        })
+        self.push(NodeData::ProcessingInstruction { target: target.to_string(), contents: data.to_string() })
     }
 
     fn append(&self, parent: &NodeId, child: NodeOrText<NodeId>) {
@@ -609,12 +487,7 @@ impl TreeSink for Sink {
         }
     }
 
-    fn append_based_on_parent_node(
-        &self,
-        element: &NodeId,
-        prev_element: &NodeId,
-        child: NodeOrText<NodeId>,
-    ) {
+    fn append_based_on_parent_node(&self, element: &NodeId, prev_element: &NodeId, child: NodeOrText<NodeId>) {
         let has_parent = self.nodes.borrow()[*element].parent.is_some();
         if has_parent {
             self.append_before_sibling(element, child);
@@ -623,26 +496,15 @@ impl TreeSink for Sink {
         }
     }
 
-    fn append_doctype_to_document(
-        &self,
-        name: StrTendril,
-        public_id: StrTendril,
-        system_id: StrTendril,
-    ) {
-        let id = self.push(NodeData::Doctype {
-            name: name.to_string(),
-            public_id: public_id.to_string(),
-            system_id: system_id.to_string(),
-        });
+    fn append_doctype_to_document(&self, name: StrTendril, public_id: StrTendril, system_id: StrTendril) {
+        let id =
+            self.push(NodeData::Doctype { name: name.to_string(), public_id: public_id.to_string(), system_id: system_id.to_string() });
         self.append_node(DOCUMENT, id);
     }
 
     fn get_template_contents(&self, target: &NodeId) -> NodeId {
         match self.nodes.borrow()[*target].data {
-            NodeData::Element {
-                template_contents: Some(t),
-                ..
-            } => t,
+            NodeData::Element { template_contents: Some(t), .. } => t,
             _ => panic!("get_template_contents called on a non-template node"),
         }
     }
@@ -669,9 +531,7 @@ impl TreeSink for Sink {
                         }
                     }
                 }
-                let id = self.push(NodeData::Text {
-                    contents: text.to_string(),
-                });
+                let id = self.push(NodeData::Text { contents: text.to_string() });
                 self.insert_at(parent, index, id);
             }
             NodeOrText::AppendNode(id) => {
@@ -684,10 +544,7 @@ impl TreeSink for Sink {
 
     fn add_attrs_if_missing(&self, target: &NodeId, attrs: Vec<Attribute>) {
         let mut nodes = self.nodes.borrow_mut();
-        if let NodeData::Element {
-            attrs: existing, ..
-        } = &mut nodes[*target].data
-        {
+        if let NodeData::Element { attrs: existing, .. } = &mut nodes[*target].data {
             for attr in attrs {
                 if !existing.iter().any(|(n, _)| *n == attr.name) {
                     existing.push((attr.name, attr.value.to_string()));
@@ -736,10 +593,7 @@ pub fn parse_fragment(html: &str, context: &str) -> Dom {
     let name = QualName::new(None, ns!(html), LocalName::from(context));
     let context_elem = html5ever::interface::create_element(&sink, name, Vec::new());
     let tb = TreeBuilder::new_for_fragment(sink, context_elem, None, TreeBuilderOpts::default());
-    let tok_opts = TokenizerOpts {
-        initial_state: Some(tb.tokenizer_state_for_context_elem(false)),
-        ..Default::default()
-    };
+    let tok_opts = TokenizerOpts { initial_state: Some(tb.tokenizer_state_for_context_elem(false)), ..Default::default() };
     let tok = Tokenizer::new(DepthCap::new(tb), tok_opts);
     drive(&tok, html);
     into_fragment(tok.sink.into_inner().sink.finish())
@@ -748,21 +602,13 @@ pub fn parse_fragment(html: &str, context: &str) -> Dom {
 /// Fragment parses wrap their content in a synthetic `<html>` element: splice
 /// that wrapper's children up into the document node.
 fn into_fragment(mut dom: Dom) -> Dom {
-    let wrapper = dom.nodes[DOCUMENT]
-        .children
-        .iter()
-        .copied()
-        .find(|&c| matches!(dom.nodes[c].data, NodeData::Element { .. }));
+    let wrapper = dom.nodes[DOCUMENT].children.iter().copied().find(|&c| matches!(dom.nodes[c].data, NodeData::Element { .. }));
     if let Some(w) = wrapper {
         let kids = std::mem::take(&mut dom.nodes[w].children);
         for &k in &kids {
             dom.nodes[k].parent = Some(DOCUMENT);
         }
-        let pos = dom.nodes[DOCUMENT]
-            .children
-            .iter()
-            .position(|&c| c == w)
-            .unwrap();
+        let pos = dom.nodes[DOCUMENT].children.iter().position(|&c| c == w).unwrap();
         dom.nodes[DOCUMENT].children.splice(pos..=pos, kids);
     }
     dom

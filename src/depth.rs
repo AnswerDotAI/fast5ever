@@ -14,8 +14,8 @@
 
 use std::cell::RefCell;
 
-use html5ever::tokenizer::{TagKind, Token, TokenSink, TokenSinkResult};
 use html5ever::LocalName;
+use html5ever::tokenizer::{TagKind, Token, TokenSink, TokenSinkResult};
 
 /// Maximum element nesting depth, matching Chromium.
 pub const MAX_DEPTH: usize = 512;
@@ -80,11 +80,7 @@ pub struct DepthCap<S> {
 
 impl<S> DepthCap<S> {
     pub fn new(inner: S) -> DepthCap<S> {
-        DepthCap {
-            inner,
-            open: RefCell::new(Vec::new()),
-            swallowed: RefCell::new(Vec::new()),
-        }
+        DepthCap { inner, open: RefCell::new(Vec::new()), swallowed: RefCell::new(Vec::new()) }
     }
 
     pub fn into_inner(self) -> S {
@@ -102,10 +98,7 @@ impl<S: TokenSink> TokenSink for DepthCap<S> {
                     // The html tree construction algorithm ignores the
                     // self-closing slash except in foreign (SVG/MathML)
                     // content, so only skip counting there or for voids.
-                    let foreign_self_closing = tag.self_closing
-                        && self
-                            .inner
-                            .adjusted_current_node_present_but_not_in_html_namespace();
+                    let foreign_self_closing = tag.self_closing && self.inner.adjusted_current_node_present_but_not_in_html_namespace();
                     if !is_void(&tag.name) && !foreign_self_closing {
                         let mut open = self.open.borrow_mut();
                         if closes_same(&tag.name) && open.last() == Some(&tag.name) {
@@ -139,7 +132,6 @@ impl<S: TokenSink> TokenSink for DepthCap<S> {
     }
 
     fn adjusted_current_node_present_but_not_in_html_namespace(&self) -> bool {
-        self.inner
-            .adjusted_current_node_present_but_not_in_html_namespace()
+        self.inner.adjusted_current_node_present_but_not_in_html_namespace()
     }
 }

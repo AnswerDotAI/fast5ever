@@ -8,4 +8,4 @@ mod dom;
 mod python;
 
 pub use depth::MAX_DEPTH;
-pub use dom::{parse, parse_fragment, Dom, DomError, Node, NodeData, NodeId, DOCUMENT};
+pub use dom::{DOCUMENT, Dom, DomError, Node, NodeData, NodeId, parse, parse_fragment};

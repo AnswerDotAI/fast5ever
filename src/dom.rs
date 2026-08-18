@@ -138,11 +138,9 @@ impl Dom {
     /// the copy's id, detached. The importing side of a cross-tree splice.
     pub fn import(&mut self, other: &Dom, id: NodeId) -> NodeId {
         let data = match &other.nodes[id].data {
-            NodeData::Element { name, attrs, template_contents } => NodeData::Element {
-                name: name.clone(),
-                attrs: attrs.clone(),
-                template_contents: template_contents.map(|t| self.import(other, t)),
-            },
+            NodeData::Element { name, attrs, template_contents } => {
+                NodeData::Element { name: name.clone(), attrs: attrs.clone(), template_contents: template_contents.map(|t| self.import(other, t)) }
+            }
             other_data => other_data.clone(),
         };
         let new_id = self.push(data);
@@ -305,12 +303,8 @@ impl Dom {
             _ => TraversalScope::IncludeNode,
         };
         let mut buf = Vec::new();
-        html5ever::serialize::serialize(
-            &mut buf,
-            &SerNode { dom: self, id },
-            SerializeOpts { traversal_scope: scope, ..Default::default() },
-        )
-        .expect("serializing to a Vec cannot fail");
+        html5ever::serialize::serialize(&mut buf, &SerNode { dom: self, id }, SerializeOpts { traversal_scope: scope, ..Default::default() })
+            .expect("serializing to a Vec cannot fail");
         String::from_utf8(buf).expect("serializer output is UTF-8")
     }
 
@@ -372,10 +366,7 @@ struct Sink {
 
 impl Sink {
     fn new() -> Sink {
-        Sink {
-            nodes: RefCell::new(vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }]),
-            quirks: Cell::new(QuirksMode::NoQuirks),
-        }
+        Sink { nodes: RefCell::new(vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }]), quirks: Cell::new(QuirksMode::NoQuirks) }
     }
 
     fn push(&self, data: NodeData) -> NodeId {
@@ -497,8 +488,7 @@ impl TreeSink for Sink {
     }
 
     fn append_doctype_to_document(&self, name: StrTendril, public_id: StrTendril, system_id: StrTendril) {
-        let id =
-            self.push(NodeData::Doctype { name: name.to_string(), public_id: public_id.to_string(), system_id: system_id.to_string() });
+        let id = self.push(NodeData::Doctype { name: name.to_string(), public_id: public_id.to_string(), system_id: system_id.to_string() });
         self.append_node(DOCUMENT, id);
     }
 

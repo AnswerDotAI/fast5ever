@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use pyo3::exceptions::{PyKeyError, PyValueError};
+use pyo3::exceptions::{PyAttributeError, PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyIterator, PyList, PyTuple};
 
@@ -103,6 +103,13 @@ impl Node {
 
 #[pymethods]
 impl Node {
+    /// Read an HTML attribute through Python spelling (`data_op` reads
+    /// `data-op`). Real node properties take precedence over this fallback.
+    fn __getattr__(&self, name: &str) -> PyResult<String> {
+        let attr = name.replace('_', "-");
+        self.dom.read().unwrap().attr(self.id, &attr).map(str::to_string).ok_or_else(|| PyAttributeError::new_err(name.to_string()))
+    }
+
     /// Element tag name, or `#document`/`#text`/`#comment`/`#doctype`/`#pi`.
     #[getter]
     fn name(&self) -> String {
@@ -181,13 +188,13 @@ impl Node {
 
     /// Serialize this node (elements include themselves; a document node
     /// serializes its children).
-    fn to_html(&self) -> String {
-        self.dom.read().unwrap().to_html(self.id)
+    fn to_html(&self, py: Python<'_>) -> String {
+        py.detach(|| self.dom.read().unwrap().to_html(self.id))
     }
 
     /// Concatenated text-node descendants.
-    fn to_text(&self) -> String {
-        self.dom.read().unwrap().to_text(self.id)
+    fn to_text(&self, py: Python<'_>) -> String {
+        py.detach(|| self.dom.read().unwrap().to_text(self.id))
     }
 
     /// Append `child` as the last child. A `Document` node splices its
@@ -215,6 +222,23 @@ impl Node {
         let id = self.local_id(new);
         self.dom.write().unwrap().replace_child(self.id, id, old.id)?;
         Ok(())
+    }
+
+    /// Replace this node through its parent; a `Document` replacement splices
+    /// its children. Raises when this node is detached.
+    fn replace(&self, new: &Node) -> PyResult<()> {
+        let parent = self.dom.read().unwrap().parent(self.id).ok_or_else(|| PyValueError::new_err("cannot replace a detached node"))?;
+        let id = self.local_id(new);
+        self.dom.write().unwrap().replace_child(parent, id, self.id)?;
+        Ok(())
+    }
+
+    /// Replace this element with its contents. Raises when detached or not an element.
+    fn unwrap(&self) -> PyResult<()> {
+        if self.dom.read().unwrap().parent(self.id).is_none() {
+            return Err(PyValueError::new_err("cannot unwrap a detached node"));
+        }
+        Ok(self.dom.write().unwrap().unwrap(self.id)?)
     }
 
     /// Detach this node from its parent (no-op when already detached).
@@ -400,7 +424,7 @@ impl Attrs {
 /// Parse a complete HTML document; returns the `Document` node.
 #[pyfunction]
 fn parse(py: Python<'_>, html: &str) -> PyResult<Py<Document>> {
-    let dom = Arc::new(RwLock::new(crate::dom::parse(html)));
+    let dom = Arc::new(RwLock::new(py.detach(|| crate::dom::parse(html))));
     Py::new(py, PyClassInitializer::from(Node { dom, id: crate::dom::DOCUMENT }).add_subclass(Document))
 }
 
@@ -410,7 +434,7 @@ fn parse(py: Python<'_>, html: &str) -> PyResult<Py<Document>> {
 #[pyfunction]
 #[pyo3(signature = (html, context="body"))]
 fn parse_fragment(py: Python<'_>, html: &str, context: &str) -> PyResult<Py<Document>> {
-    let dom = Arc::new(RwLock::new(crate::dom::parse_fragment(html, context)));
+    let dom = Arc::new(RwLock::new(py.detach(|| crate::dom::parse_fragment(html, context))));
     Py::new(py, PyClassInitializer::from(Node { dom, id: crate::dom::DOCUMENT }).add_subclass(Document))
 }
 

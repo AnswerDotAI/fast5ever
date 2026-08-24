@@ -286,6 +286,22 @@ impl Dom {
         Ok(())
     }
 
+    /// Replace an element with its contents, preserving their order. Template
+    /// contents are spliced just like ordinary children.
+    pub fn unwrap(&mut self, id: NodeId) -> Result<(), DomError> {
+        let parent = self.nodes[id].parent.ok_or(DomError::NotAChild)?;
+        let content = match &self.nodes[id].data {
+            NodeData::Element { template_contents: Some(t), .. } => *t,
+            NodeData::Element { .. } => id,
+            _ => return Err(DomError::NotAnElement),
+        };
+        for child in self.nodes[content].children.clone() {
+            self.insert_before(parent, child, Some(id))?;
+        }
+        self.detach(id);
+        Ok(())
+    }
+
     /// Detach every child of `id`.
     pub fn clear_children(&mut self, id: NodeId) {
         for c in std::mem::take(&mut self.nodes[id].children) {

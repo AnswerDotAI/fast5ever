@@ -115,6 +115,36 @@ def test_structure_mutation():
     assert frag.to_html() == '<ul><li>b</li><li>z</li></ul>'
 
 
+def test_node_replace():
+    from fast5ever import Span
+    frag = parse_fragment('<p>old <em>word</em></p>')
+    old = frag.children[0].children[1]
+    old.replace(Span('French', cls='language'))
+    assert frag.to_html() == '<p>old <span class="language">French</span></p>'
+    with pytest.raises(ValueError, match="detached"): old.replace(Text('unused'))
+
+
+def test_node_unwrap():
+    frag = parse_fragment('<p>before <a><em>linked</em> text</a> after</p><template><strong>inert</strong></template>')
+    link,template = frag.children[0].children[1],frag.children[1]
+    link.unwrap()
+    template.unwrap()
+    assert frag.to_html() == '<p>before <em>linked</em> text after</p><strong>inert</strong>'
+    with pytest.raises(ValueError, match="detached"): link.unwrap()
+
+
+def test_dynamic_element_factories():
+    from fastcore.basics import NotStr
+    from fastcore.xml import Safe
+    from fast5ever import CustomThing, Span, Tr
+    el = CustomThing('plain & safe', Span('inside'), data_kind='example')
+    assert isinstance(el, Element)
+    assert el.to_html() == '<custom-thing data-kind="example">plain &amp; safe<span>inside</span></custom-thing>'
+    assert Span(Safe('<em>safe</em>'), NotStr('<strong>raw</strong>')).to_html() == '<span><em>safe</em><strong>raw</strong></span>'
+    assert Tr(Safe('<td>cell</td>')).to_html() == '<tr><td>cell</td></tr>'  # raw children parse in their parent's context
+    with pytest.raises(TypeError, match="str, Safe, NotStr, or Node"): Span(1)
+
+
 def test_fragment_splice():
     # appending a #document node splices its children, like a DocumentFragment
     frag = parse_fragment('<div>start</div>')
@@ -215,6 +245,15 @@ def test_attrs_iteration_and_update():
     assert a == {'id': 'a', 'class': 'k', 'data-x': 'y'}
     assert a.pop('data-x') == 'y' and a.pop('data-x', None) is None
     with pytest.raises(KeyError): a.pop('data-x')
+
+
+def test_attrs_as_node_properties():
+    el = parse_fragment('<p data-op="mediawiki:magic" custom-style="Lead" name="n"></p>').children[0]
+    assert el.data_op == 'mediawiki:magic' and el.custom_style == 'Lead'
+    assert el.name == 'p' and el.attrs['name'] == 'n'   # real node properties win
+    el.attrs['data-op'] = 'mediawiki:transclude'
+    assert el.data_op == 'mediawiki:transclude'
+    with pytest.raises(AttributeError): el.missing
 
 
 def test_attrs_non_element():

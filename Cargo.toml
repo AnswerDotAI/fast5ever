@@ -9,6 +9,12 @@ description = "WHATWG-compliant HTML parsing, mutation, and serialization for Py
 name = "fast5ever"
 crate-type = ["cdylib", "rlib"]
 
+[profile.play]
+inherits = "release"
+lto = false
+incremental = true
+codegen-units = 16
+
 [dependencies]
 html5ever = "0.39.0"
 pyo3 = { version = ">=0.28", optional = true }

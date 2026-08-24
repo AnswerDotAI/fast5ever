@@ -12,6 +12,9 @@ frag.to_html()                        # '<p>one</p><p>two</p>'
 [c.name for c in frag.children]       # ['p', 'p']
 frag.children[0].attrs['class'] = 'lead'   # attrs is live: writes go straight to the tree
 
+from fast5ever import Span
+frag.children[0].replace(Span('replacement', cls='lead'))
+
 doc = parse('<!DOCTYPE html><title>t</title>hello')
 doc.to_html()                         # '<!DOCTYPE html><html><head><title>t'...
 ```
@@ -19,11 +22,11 @@ doc.to_html()                         # '<!DOCTYPE html><html><head><title>t'...
 ## API
 
 - `parse(html)` parses a complete document; `parse_fragment(html, context='body')` parses a fragment in a context element (pass e.g. `context='tbody'` to parse table rows). Both return a `Document` node.
-- Every node is a `Document`, `Element`, `Text`, `Comment`, or `Doctype` - all subclasses of `Node` - so kind checks are `isinstance(c, Text)`. Shared surface: `.name` (tag, or `#document`/`#text`/`#comment`/`#doctype`; writable on elements — `el.name = 'details'` renames in place, keeping attributes and children), `.children`, `.parent`, `to_html()`, `to_text()`.
+- Every node is a `Document`, `Element`, `Text`, `Comment`, or `Doctype` - all subclasses of `Node` - so kind checks are `isinstance(c, Text)`. Shared surface: `.name` (tag, or `#document`/`#text`/`#comment`/`#doctype`; writable on elements — `el.name = 'details'` renames in place, keeping attributes and children), `.children`, `.parent`, `to_html()`, `to_text()`. A missing Python property reads the correspondingly hyphenated HTML attribute (`el.data_op` reads `data-op`) and raises `AttributeError` when absent; writes remain explicit through `.attrs`.
 - `el.attrs` is a live mapping in source order: `attrs['k']`, `attrs['k'] = v`, `del attrs['k']`, `in`/`len`/iteration, `get`/`keys`/`values`/`items`/`update`/`pop`, `== {...}` against any mapping; `dict(attrs)` snapshots. (Non-elements read as empty and refuse writes.)
 - `.text` is a text or comment node's own content, writable: `t.text = 'new'`. `template.content` is a `<template>` element's contents as a `Document`.
-- `Element(name, attrs=None)`, `Text(text)`, and `Comment(text)` construct detached nodes to insert.
-- Structure: `append_child`, `insert_before(child, reference)`, `replace_child(new, old)`, `detach()`. Inserting a `Document` node splices its children in (DocumentFragment semantics), so `div.replace_child(parse_fragment(markup), old)` splices markup in place. Inserting a node from another tree deep-copies it; handles stay valid across all mutations.
+- `Element(name, attrs=None)`, `Text(text)`, and `Comment(text)` construct detached nodes to insert. Undefined capitalized module attributes are concise element factories with fastcore.xml-style spelling: `from fast5ever import CustomTag` makes `CustomTag('text', cls='x', data_kind='demo')` construct `<custom-tag class="x" data-kind="demo">text</custom-tag>`. Positional strings become escaped `Text` nodes and positional nodes remain nodes. `fastcore.xml.Safe` and `fastcore.basics.NotStr` are trusted markup: they parse as fragments in the new element's context, so table children and other context-sensitive HTML work correctly.
+- Structure: `append_child`, `insert_before(child, reference)`, `replace_child(new, old)`, `replace(new)`, `unwrap()`, `detach()`. `old.replace(new)` is the convenient form of `old.parent.replace_child(new, old)`; `el.unwrap()` replaces an element with its contents. Inserting a `Document` node splices its children in (DocumentFragment semantics), so `old.replace(parse_fragment(markup))` splices markup in place. Inserting a node from another tree deep-copies it; handles stay valid across all mutations.
 
 The node API follows the WHATWG DOM's vocabulary, with a pythonic surface (real node classes, attrs as a live mapping, `to_html()`/`to_text()`) modeled on Emil Stenström's [JustHTML](https://github.com/EmilStenstrom/justhtml). The parsing and serialization engine is Servo's [html5ever](https://github.com/servo/html5ever).
 

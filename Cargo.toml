@@ -4,6 +4,11 @@ version = "0.1.5"
 edition = "2024"
 license = "Apache-2.0"
 description = "WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's html5ever"
+repository = "https://github.com/AnswerDotAI/fast5ever"
+homepage = "https://github.com/AnswerDotAI/fast5ever"
+documentation = "https://github.com/AnswerDotAI/fast5ever"
+keywords = ["html", "html5", "parser", "dom", "serialization"]
+categories = ["parser-implementations", "web-programming"]
 
 [lib]
 name = "fast5ever"

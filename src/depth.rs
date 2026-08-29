@@ -72,20 +72,12 @@ fn closes_same(name: &str) -> bool {
     )
 }
 
-pub struct DepthCap<S> {
-    inner: S,
-    open: RefCell<Vec<LocalName>>,
-    swallowed: RefCell<Vec<LocalName>>,
-}
+pub struct DepthCap<S> { inner: S, open: RefCell<Vec<LocalName>>, swallowed: RefCell<Vec<LocalName>> }
 
 impl<S> DepthCap<S> {
-    pub fn new(inner: S) -> DepthCap<S> {
-        DepthCap { inner, open: RefCell::new(Vec::new()), swallowed: RefCell::new(Vec::new()) }
-    }
+    pub fn new(inner: S) -> DepthCap<S> { DepthCap { inner, open: RefCell::new(Vec::new()), swallowed: RefCell::new(Vec::new()) } }
 
-    pub fn into_inner(self) -> S {
-        self.inner
-    }
+    pub fn into_inner(self) -> S { self.inner }
 }
 
 impl<S: TokenSink> TokenSink for DepthCap<S> {
@@ -106,9 +98,7 @@ impl<S: TokenSink> TokenSink for DepthCap<S> {
                         } else if open.len() >= MAX_DEPTH {
                             self.swallowed.borrow_mut().push(tag.name.clone());
                             return TokenSinkResult::Continue;
-                        } else {
-                            open.push(tag.name.clone());
-                        }
+                        } else { open.push(tag.name.clone()); }
                     }
                 }
                 TagKind::EndTag => {
@@ -118,20 +108,14 @@ impl<S: TokenSink> TokenSink for DepthCap<S> {
                         return TokenSinkResult::Continue;
                     }
                     let mut open = self.open.borrow_mut();
-                    if let Some(pos) = open.iter().rposition(|n| *n == tag.name) {
-                        open.truncate(pos);
-                    }
+                    if let Some(pos) = open.iter().rposition(|n| *n == tag.name) { open.truncate(pos); }
                 }
             }
         }
         self.inner.process_token(token, line_number)
     }
 
-    fn end(&self) {
-        self.inner.end();
-    }
+    fn end(&self) { self.inner.end(); }
 
-    fn adjusted_current_node_present_but_not_in_html_namespace(&self) -> bool {
-        self.inner.adjusted_current_node_present_but_not_in_html_namespace()
-    }
+    fn adjusted_current_node_present_but_not_in_html_namespace(&self) -> bool { self.inner.adjusted_current_node_present_but_not_in_html_namespace() }
 }

@@ -31,11 +31,7 @@ pub enum NodeData {
 }
 
 #[derive(Debug, Clone)]
-pub struct Node {
-    pub parent: Option<NodeId>,
-    pub children: Vec<NodeId>,
-    pub data: NodeData,
-}
+pub struct Node { pub parent: Option<NodeId>, pub children: Vec<NodeId>, pub data: NodeData }
 
 /// A structural mutation that cannot be applied.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,30 +61,19 @@ impl std::error::Error for DomError {}
 /// (for fragments, the fragment root). Ids stay valid for the life of the
 /// `Dom`: detached nodes remain in the arena as orphans.
 #[derive(Debug, Clone)]
-pub struct Dom {
-    pub nodes: Vec<Node>,
-    pub quirks_mode: QuirksMode,
-}
+pub struct Dom { pub nodes: Vec<Node>, pub quirks_mode: QuirksMode }
 
 pub const DOCUMENT: NodeId = 0;
 
 impl Dom {
     /// An empty tree: just a document node.
-    pub fn new() -> Dom {
-        Dom { nodes: vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }], quirks_mode: QuirksMode::NoQuirks }
-    }
+    pub fn new() -> Dom { Dom { nodes: vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }], quirks_mode: QuirksMode::NoQuirks } }
 
-    pub fn get(&self, id: NodeId) -> &Node {
-        &self.nodes[id]
-    }
+    pub fn get(&self, id: NodeId) -> &Node { &self.nodes[id] }
 
-    pub fn children(&self, id: NodeId) -> &[NodeId] {
-        &self.nodes[id].children
-    }
+    pub fn children(&self, id: NodeId) -> &[NodeId] { &self.nodes[id].children }
 
-    pub fn parent(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes[id].parent
-    }
+    pub fn parent(&self, id: NodeId) -> Option<NodeId> { self.nodes[id].parent }
 
     /// Element ids in document order from `id` (inclusive when `id` is an element).
     pub fn descendants(&self, id: NodeId) -> Vec<NodeId> {
@@ -104,10 +89,7 @@ impl Dom {
     /// The children serialization walks: a template element's contents stand in
     /// for its (always empty) structural children.
     fn serial_children(&self, id: NodeId) -> &[NodeId] {
-        match &self.nodes[id].data {
-            NodeData::Element { template_contents: Some(t), .. } => &self.nodes[*t].children,
-            _ => &self.nodes[id].children,
-        }
+        match &self.nodes[id].data { NodeData::Element { template_contents: Some(t), .. } => &self.nodes[*t].children, _ => &self.nodes[id].children }
     }
 
     // --- creation ---
@@ -125,14 +107,10 @@ impl Dom {
     }
 
     /// Create a detached text node.
-    pub fn create_text(&mut self, text: &str) -> NodeId {
-        self.push(NodeData::Text { contents: text.to_string() })
-    }
+    pub fn create_text(&mut self, text: &str) -> NodeId { self.push(NodeData::Text { contents: text.to_string() }) }
 
     /// Create a detached comment node.
-    pub fn create_comment(&mut self, text: &str) -> NodeId {
-        self.push(NodeData::Comment { contents: text.to_string() })
-    }
+    pub fn create_comment(&mut self, text: &str) -> NodeId { self.push(NodeData::Comment { contents: text.to_string() }) }
 
     /// Deep-copy `id` (and its subtree) from `other` into this arena, returning
     /// the copy's id, detached. The importing side of a cross-tree splice.
@@ -155,21 +133,15 @@ impl Dom {
     // --- attributes ---
 
     pub fn attr(&self, id: NodeId, name: &str) -> Option<&str> {
-        match &self.nodes[id].data {
-            NodeData::Element { attrs, .. } => attrs.iter().find(|(n, _)| &*n.local == name).map(|(_, v)| v.as_str()),
-            _ => None,
-        }
+        match &self.nodes[id].data { NodeData::Element { attrs, .. } => attrs.iter().find(|(n, _)| &*n.local == name).map(|(_, v)| v.as_str()), _ => None }
     }
 
     /// Set (or add, preserving order for existing keys) an attribute.
     pub fn set_attr(&mut self, id: NodeId, name: &str, value: &str) -> Result<(), DomError> {
         match &mut self.nodes[id].data {
             NodeData::Element { attrs, .. } => {
-                if let Some(slot) = attrs.iter_mut().find(|(n, _)| &*n.local == name) {
-                    slot.1 = value.to_string();
-                } else {
-                    attrs.push((QualName::new(None, ns!(), LocalName::from(name)), value.to_string()));
-                }
+                if let Some(slot) = attrs.iter_mut().find(|(n, _)| &*n.local == name) { slot.1 = value.to_string(); }
+                else { attrs.push((QualName::new(None, ns!(), LocalName::from(name)), value.to_string())); }
                 Ok(())
             }
             _ => Err(DomError::NotAnElement),
@@ -214,21 +186,12 @@ impl Dom {
     // --- structure ---
 
     /// Detach `id` from its parent (no-op when already detached).
-    pub fn detach(&mut self, id: NodeId) {
-        if let Some(p) = self.nodes[id].parent.take() {
-            self.nodes[p].children.retain(|&c| c != id);
-        }
-    }
+    pub fn detach(&mut self, id: NodeId) { if let Some(p) = self.nodes[id].parent.take() { self.nodes[p].children.retain(|&c| c != id); } }
 
     fn is_ancestor(&self, maybe_ancestor: NodeId, mut node: NodeId) -> bool {
         loop {
-            if node == maybe_ancestor {
-                return true;
-            }
-            match self.nodes[node].parent {
-                Some(p) => node = p,
-                None => return false,
-            }
+            if node == maybe_ancestor { return true; }
+            match self.nodes[node].parent { Some(p) => node = p, None => return false }
         }
     }
 
@@ -238,9 +201,7 @@ impl Dom {
     fn splice_ids(&mut self, child: NodeId) -> Vec<NodeId> {
         if matches!(self.nodes[child].data, NodeData::Document) {
             let kids = std::mem::take(&mut self.nodes[child].children);
-            for &k in &kids {
-                self.nodes[k].parent = None;
-            }
+            for &k in &kids { self.nodes[k].parent = None; }
             kids
         } else {
             self.detach(child);
@@ -257,16 +218,12 @@ impl Dom {
 
     /// Append `child` as `parent`'s last child. A document node splices its
     /// children instead (and is left empty).
-    pub fn append_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), DomError> {
-        self.insert_before(parent, child, None)
-    }
+    pub fn append_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), DomError> { self.insert_before(parent, child, None) }
 
     /// Insert `child` before `reference` (`None` appends). A document node
     /// splices its children instead (and is left empty).
     pub fn insert_before(&mut self, parent: NodeId, child: NodeId, reference: Option<NodeId>) -> Result<(), DomError> {
-        if self.is_ancestor(child, parent) && !matches!(self.nodes[child].data, NodeData::Document) {
-            return Err(DomError::WouldCycle);
-        }
+        if self.is_ancestor(child, parent) && !matches!(self.nodes[child].data, NodeData::Document) { return Err(DomError::WouldCycle); }
         let ids = self.splice_ids(child);
         let index = match reference {
             None => self.nodes[parent].children.len(),
@@ -278,9 +235,7 @@ impl Dom {
 
     /// Replace `old` (a child of `parent`) with `new`; `old` is detached.
     pub fn replace_child(&mut self, parent: NodeId, new: NodeId, old: NodeId) -> Result<(), DomError> {
-        if new == old {
-            return Ok(());
-        }
+        if new == old { return Ok(()); }
         self.insert_before(parent, new, Some(old))?;
         self.detach(old);
         Ok(())
@@ -295,29 +250,20 @@ impl Dom {
             NodeData::Element { .. } => id,
             _ => return Err(DomError::NotAnElement),
         };
-        for child in self.nodes[content].children.clone() {
-            self.insert_before(parent, child, Some(id))?;
-        }
+        for child in self.nodes[content].children.clone() { self.insert_before(parent, child, Some(id))?; }
         self.detach(id);
         Ok(())
     }
 
     /// Detach every child of `id`.
-    pub fn clear_children(&mut self, id: NodeId) {
-        for c in std::mem::take(&mut self.nodes[id].children) {
-            self.nodes[c].parent = None;
-        }
-    }
+    pub fn clear_children(&mut self, id: NodeId) { for c in std::mem::take(&mut self.nodes[id].children) { self.nodes[c].parent = None; } }
 
     // --- output ---
 
     /// Serialize: elements include themselves, document nodes serialize their
     /// children (the fragment/document markup).
     pub fn to_html(&self, id: NodeId) -> String {
-        let scope = match self.nodes[id].data {
-            NodeData::Document => TraversalScope::ChildrenOnly(None),
-            _ => TraversalScope::IncludeNode,
-        };
+        let scope = match self.nodes[id].data { NodeData::Document => TraversalScope::ChildrenOnly(None), _ => TraversalScope::IncludeNode };
         let mut buf = Vec::new();
         html5ever::serialize::serialize(&mut buf, &SerNode { dom: self, id }, SerializeOpts { traversal_scope: scope, ..Default::default() })
             .expect("serializing to a Vec cannot fail");
@@ -327,41 +273,26 @@ impl Dom {
     /// Concatenated contents of all text descendants (raw text included).
     pub fn to_text(&self, id: NodeId) -> String {
         let mut out = String::new();
-        for n in self.descendants(id) {
-            if let NodeData::Text { contents } = &self.nodes[n].data {
-                out.push_str(contents);
-            }
-        }
+        for n in self.descendants(id) { if let NodeData::Text { contents } = &self.nodes[n].data { out.push_str(contents); } }
         out
     }
 }
 
-impl Default for Dom {
-    fn default() -> Self {
-        Dom::new()
-    }
-}
+impl Default for Dom { fn default() -> Self { Dom::new() } }
 
-struct SerNode<'a> {
-    dom: &'a Dom,
-    id: NodeId,
-}
+struct SerNode<'a> { dom: &'a Dom, id: NodeId }
 
 impl Serialize for SerNode<'_> {
     fn serialize<S: Serializer>(&self, serializer: &mut S, traversal_scope: TraversalScope) -> io::Result<()> {
         let node = &self.dom.nodes[self.id];
         if let TraversalScope::ChildrenOnly(_) = traversal_scope {
-            for &child in self.dom.serial_children(self.id) {
-                SerNode { dom: self.dom, id: child }.serialize(serializer, TraversalScope::IncludeNode)?;
-            }
+            for &child in self.dom.serial_children(self.id) { SerNode { dom: self.dom, id: child }.serialize(serializer, TraversalScope::IncludeNode)?; }
             return Ok(());
         }
         match &node.data {
             NodeData::Element { name, attrs, .. } => {
                 serializer.start_elem(name.clone(), attrs.iter().map(|(n, v)| (n, v.as_str())))?;
-                for &child in self.dom.serial_children(self.id) {
-                    SerNode { dom: self.dom, id: child }.serialize(serializer, TraversalScope::IncludeNode)?;
-                }
+                for &child in self.dom.serial_children(self.id) { SerNode { dom: self.dom, id: child }.serialize(serializer, TraversalScope::IncludeNode)?; }
                 serializer.end_elem(name.clone())
             }
             NodeData::Text { contents } => serializer.write_text(contents),
@@ -375,10 +306,7 @@ impl Serialize for SerNode<'_> {
 
 // --- parsing ---
 
-struct Sink {
-    nodes: RefCell<Vec<Node>>,
-    quirks: Cell<QuirksMode>,
-}
+struct Sink { nodes: RefCell<Vec<Node>>, quirks: Cell<QuirksMode> }
 
 impl Sink {
     fn new() -> Sink {
@@ -421,9 +349,7 @@ impl Sink {
         let mut nodes = self.nodes.borrow_mut();
         if let Some(p) = nodes[id].parent.take() {
             let pos = nodes[p].children.iter().position(|&c| c == id);
-            if let Some(pos) = pos {
-                nodes[p].children.remove(pos);
-            }
+            if let Some(pos) = pos { nodes[p].children.remove(pos); }
         }
     }
 
@@ -437,19 +363,12 @@ impl Sink {
 
 /// Owned element name, so `elem_name` needs no borrow into the arena.
 #[derive(Debug)]
-pub struct OwnedElemName {
-    ns: Namespace,
-    local: LocalName,
-}
+pub struct OwnedElemName { ns: Namespace, local: LocalName }
 
 impl ElemName for OwnedElemName {
-    fn ns(&self) -> &Namespace {
-        &self.ns
-    }
+    fn ns(&self) -> &Namespace { &self.ns }
 
-    fn local_name(&self) -> &LocalName {
-        &self.local
-    }
+    fn local_name(&self) -> &LocalName { &self.local }
 }
 
 impl TreeSink for Sink {
@@ -457,15 +376,11 @@ impl TreeSink for Sink {
     type Output = Dom;
     type ElemName<'a> = OwnedElemName;
 
-    fn finish(self) -> Dom {
-        Dom { nodes: self.nodes.into_inner(), quirks_mode: self.quirks.get() }
-    }
+    fn finish(self) -> Dom { Dom { nodes: self.nodes.into_inner(), quirks_mode: self.quirks.get() } }
 
     fn parse_error(&self, _msg: Cow<'static, str>) {}
 
-    fn get_document(&self) -> NodeId {
-        DOCUMENT
-    }
+    fn get_document(&self) -> NodeId { DOCUMENT }
 
     fn elem_name<'a>(&'a self, target: &'a NodeId) -> OwnedElemName {
         match &self.nodes.borrow()[*target].data {
@@ -479,28 +394,19 @@ impl TreeSink for Sink {
         self.push(NodeData::Element { name, attrs: attrs.into_iter().map(|a| (a.name, a.value.to_string())).collect(), template_contents })
     }
 
-    fn create_comment(&self, text: StrTendril) -> NodeId {
-        self.push(NodeData::Comment { contents: text.to_string() })
-    }
+    fn create_comment(&self, text: StrTendril) -> NodeId { self.push(NodeData::Comment { contents: text.to_string() }) }
 
     fn create_pi(&self, target: StrTendril, data: StrTendril) -> NodeId {
         self.push(NodeData::ProcessingInstruction { target: target.to_string(), contents: data.to_string() })
     }
 
     fn append(&self, parent: &NodeId, child: NodeOrText<NodeId>) {
-        match child {
-            NodeOrText::AppendNode(id) => self.append_node(*parent, id),
-            NodeOrText::AppendText(text) => self.append_text(*parent, &text),
-        }
+        match child { NodeOrText::AppendNode(id) => self.append_node(*parent, id), NodeOrText::AppendText(text) => self.append_text(*parent, &text) }
     }
 
     fn append_based_on_parent_node(&self, element: &NodeId, prev_element: &NodeId, child: NodeOrText<NodeId>) {
         let has_parent = self.nodes.borrow()[*element].parent.is_some();
-        if has_parent {
-            self.append_before_sibling(element, child);
-        } else {
-            self.append(prev_element, child);
-        }
+        if has_parent { self.append_before_sibling(element, child); } else { self.append(prev_element, child); }
     }
 
     fn append_doctype_to_document(&self, name: StrTendril, public_id: StrTendril, system_id: StrTendril) {
@@ -515,13 +421,9 @@ impl TreeSink for Sink {
         }
     }
 
-    fn same_node(&self, x: &NodeId, y: &NodeId) -> bool {
-        x == y
-    }
+    fn same_node(&self, x: &NodeId, y: &NodeId) -> bool { x == y }
 
-    fn set_quirks_mode(&self, mode: QuirksMode) {
-        self.quirks.set(mode);
-    }
+    fn set_quirks_mode(&self, mode: QuirksMode) { self.quirks.set(mode); }
 
     fn append_before_sibling(&self, sibling: &NodeId, new_node: NodeOrText<NodeId>) {
         match new_node {
@@ -551,24 +453,16 @@ impl TreeSink for Sink {
     fn add_attrs_if_missing(&self, target: &NodeId, attrs: Vec<Attribute>) {
         let mut nodes = self.nodes.borrow_mut();
         if let NodeData::Element { attrs: existing, .. } = &mut nodes[*target].data {
-            for attr in attrs {
-                if !existing.iter().any(|(n, _)| *n == attr.name) {
-                    existing.push((attr.name, attr.value.to_string()));
-                }
-            }
+            for attr in attrs { if !existing.iter().any(|(n, _)| *n == attr.name) { existing.push((attr.name, attr.value.to_string())); } }
         }
     }
 
-    fn remove_from_parent(&self, target: &NodeId) {
-        self.detach(*target);
-    }
+    fn remove_from_parent(&self, target: &NodeId) { self.detach(*target); }
 
     fn reparent_children(&self, node: &NodeId, new_parent: &NodeId) {
         let mut nodes = self.nodes.borrow_mut();
         let kids = std::mem::take(&mut nodes[*node].children);
-        for &k in &kids {
-            nodes[k].parent = Some(*new_parent);
-        }
+        for &k in &kids { nodes[k].parent = Some(*new_parent); }
         nodes[*new_parent].children.extend(kids);
     }
 }
@@ -611,9 +505,7 @@ fn into_fragment(mut dom: Dom) -> Dom {
     let wrapper = dom.nodes[DOCUMENT].children.iter().copied().find(|&c| matches!(dom.nodes[c].data, NodeData::Element { .. }));
     if let Some(w) = wrapper {
         let kids = std::mem::take(&mut dom.nodes[w].children);
-        for &k in &kids {
-            dom.nodes[k].parent = Some(DOCUMENT);
-        }
+        for &k in &kids { dom.nodes[k].parent = Some(DOCUMENT); }
         let pos = dom.nodes[DOCUMENT].children.iter().position(|&c| c == w).unwrap();
         dom.nodes[DOCUMENT].children.splice(pos..=pos, kids);
     }

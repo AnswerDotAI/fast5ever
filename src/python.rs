@@ -9,20 +9,13 @@ use pyo3::types::{PyDict, PyIterator, PyList, PyTuple};
 
 use crate::dom::{Dom, DomError, NodeData, NodeId};
 
-impl From<DomError> for PyErr {
-    fn from(e: DomError) -> PyErr {
-        PyValueError::new_err(e.to_string())
-    }
-}
+impl From<DomError> for PyErr { fn from(e: DomError) -> PyErr { PyValueError::new_err(e.to_string()) } }
 
 /// The base node handle: every node is an instance of one of the concrete
 /// classes below (`isinstance(n, Node)` matches any kind). Handles stay
 /// valid however the tree is mutated.
 #[pyclass(frozen, subclass, module = "fast5ever")]
-pub struct Node {
-    dom: Arc<RwLock<Dom>>,
-    id: NodeId,
-}
+pub struct Node { dom: Arc<RwLock<Dom>>, id: NodeId }
 
 /// An element. `Element(name, attrs=None)` creates a detached element to
 /// insert into a tree.
@@ -92,9 +85,7 @@ impl Node {
     /// The other node's id in self's arena, importing a deep copy when the
     /// two handles belong to different trees.
     fn local_id(&self, other: &Node) -> NodeId {
-        if Arc::ptr_eq(&self.dom, &other.dom) {
-            other.id
-        } else {
+        if Arc::ptr_eq(&self.dom, &other.dom) { other.id } else {
             let foreign = other.dom.read().unwrap();
             self.dom.write().unwrap().import(&foreign, other.id)
         }
@@ -126,17 +117,13 @@ impl Node {
     /// Rename the element in place (`el.name = "details"`), keeping its
     /// attributes and children; raises for non-elements.
     #[setter]
-    fn set_name(&self, value: &str) -> PyResult<()> {
-        Ok(self.dom.write().unwrap().rename(self.id, value)?)
-    }
+    fn set_name(&self, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().rename(self.id, value)?) }
 
     /// The element's attributes as a live mapping: reads see the tree as it
     /// is, and `attrs[k] = v` / `del attrs[k]` write straight through.
     /// Empty and read-only for non-elements.
     #[getter]
-    fn attrs(&self) -> Attrs {
-        Attrs { dom: self.dom.clone(), id: self.id }
-    }
+    fn attrs(&self) -> Attrs { Attrs { dom: self.dom.clone(), id: self.id } }
 
     /// Element namespace URL for non-HTML elements (SVG/MathML); `None` for
     /// HTML elements and non-elements.
@@ -152,16 +139,11 @@ impl Node {
     /// Settable on text and comment nodes.
     #[getter]
     fn text(&self) -> Option<String> {
-        match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Text { contents } | NodeData::Comment { contents } => Some(contents.clone()),
-            _ => None,
-        }
+        match &self.dom.read().unwrap().get(self.id).data { NodeData::Text { contents } | NodeData::Comment { contents } => Some(contents.clone()), _ => None }
     }
 
     #[setter]
-    fn set_text(&self, value: &str) -> PyResult<()> {
-        Ok(self.dom.write().unwrap().set_text(self.id, value)?)
-    }
+    fn set_text(&self, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().set_text(self.id, value)?) }
 
     #[getter]
     fn children(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
@@ -179,23 +161,16 @@ impl Node {
     /// outside its child list); `None` for anything else.
     #[getter]
     fn content(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        let t = match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { template_contents: Some(t), .. } => Some(*t),
-            _ => None,
-        };
+        let t = match &self.dom.read().unwrap().get(self.id).data { NodeData::Element { template_contents: Some(t), .. } => Some(*t), _ => None };
         t.map(|t| make_node(py, self.dom.clone(), t)).transpose()
     }
 
     /// Serialize this node (elements include themselves; a document node
     /// serializes its children).
-    fn to_html(&self, py: Python<'_>) -> String {
-        py.detach(|| self.dom.read().unwrap().to_html(self.id))
-    }
+    fn to_html(&self, py: Python<'_>) -> String { py.detach(|| self.dom.read().unwrap().to_html(self.id)) }
 
     /// Concatenated text-node descendants.
-    fn to_text(&self, py: Python<'_>) -> String {
-        py.detach(|| self.dom.read().unwrap().to_text(self.id))
-    }
+    fn to_text(&self, py: Python<'_>) -> String { py.detach(|| self.dom.read().unwrap().to_text(self.id)) }
 
     /// Append `child` as the last child. A `Document` node splices its
     /// children in (and is left empty); a node from another tree is
@@ -235,16 +210,12 @@ impl Node {
 
     /// Replace this element with its contents. Raises when detached or not an element.
     fn unwrap(&self) -> PyResult<()> {
-        if self.dom.read().unwrap().parent(self.id).is_none() {
-            return Err(PyValueError::new_err("cannot unwrap a detached node"));
-        }
+        if self.dom.read().unwrap().parent(self.id).is_none() { return Err(PyValueError::new_err("cannot unwrap a detached node")); }
         Ok(self.dom.write().unwrap().unwrap(self.id)?)
     }
 
     /// Detach this node from its parent (no-op when already detached).
-    fn detach(&self) {
-        self.dom.write().unwrap().detach(self.id);
-    }
+    fn detach(&self) { self.dom.write().unwrap().detach(self.id); }
 
     fn __repr__(&self) -> String {
         match &self.dom.read().unwrap().get(self.id).data {
@@ -269,9 +240,7 @@ impl Node {
 }
 
 /// A detached node in a fresh single-node arena, for the constructors.
-fn detached(dom: Dom, id: NodeId) -> Node {
-    Node { dom: Arc::new(RwLock::new(dom)), id }
-}
+fn detached(dom: Dom, id: NodeId) -> Node { Node { dom: Arc::new(RwLock::new(dom)), id } }
 
 #[pymethods]
 impl Element {
@@ -280,11 +249,7 @@ impl Element {
     fn new(name: &str, attrs: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Element>> {
         let mut dom = Dom::new();
         let id = dom.create_element(name, &[]);
-        if let Some(attrs) = attrs {
-            for (k, v) in attrs {
-                dom.set_attr(id, &k.extract::<String>()?, &v.extract::<String>()?)?;
-            }
-        }
+        if let Some(attrs) = attrs { for (k, v) in attrs { dom.set_attr(id, &k.extract::<String>()?, &v.extract::<String>()?)?; } }
         Ok(PyClassInitializer::from(detached(dom, id)).add_subclass(Element))
     }
 }
@@ -313,19 +278,12 @@ impl Comment {
 /// it is, and writes go straight to it. Compares equal to any mapping with
 /// the same items; `dict(attrs)` takes a snapshot.
 #[pyclass(frozen, module = "fast5ever")]
-pub struct Attrs {
-    dom: Arc<RwLock<Dom>>,
-    id: NodeId,
-}
+pub struct Attrs { dom: Arc<RwLock<Dom>>, id: NodeId }
 
 impl Attrs {
     fn snapshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let d = PyDict::new(py);
-        if let NodeData::Element { attrs, .. } = &self.dom.read().unwrap().get(self.id).data {
-            for (n, v) in attrs {
-                d.set_item(n.local.as_ref(), v)?;
-            }
-        }
+        if let NodeData::Element { attrs, .. } = &self.dom.read().unwrap().get(self.id).data { for (n, v) in attrs { d.set_item(n.local.as_ref(), v)?; } }
         Ok(d)
     }
 }
@@ -336,31 +294,17 @@ impl Attrs {
         self.dom.read().unwrap().attr(self.id, key).map(str::to_string).ok_or_else(|| PyKeyError::new_err(key.to_string()))
     }
 
-    fn __setitem__(&self, key: &str, value: &str) -> PyResult<()> {
-        Ok(self.dom.write().unwrap().set_attr(self.id, key, value)?)
-    }
+    fn __setitem__(&self, key: &str, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().set_attr(self.id, key, value)?) }
 
     fn __delitem__(&self, key: &str) -> PyResult<()> {
-        match self.dom.write().unwrap().remove_attr(self.id, key)? {
-            Some(_) => Ok(()),
-            None => Err(PyKeyError::new_err(key.to_string())),
-        }
+        match self.dom.write().unwrap().remove_attr(self.id, key)? { Some(_) => Ok(()), None => Err(PyKeyError::new_err(key.to_string())) }
     }
 
-    fn __contains__(&self, key: &str) -> bool {
-        self.dom.read().unwrap().attr(self.id, key).is_some()
-    }
+    fn __contains__(&self, key: &str) -> bool { self.dom.read().unwrap().attr(self.id, key).is_some() }
 
-    fn __len__(&self) -> usize {
-        match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => attrs.len(),
-            _ => 0,
-        }
-    }
+    fn __len__(&self) -> usize { match &self.dom.read().unwrap().get(self.id).data { NodeData::Element { attrs, .. } => attrs.len(), _ => 0 } }
 
-    fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyIterator>> {
-        Ok(PyList::new(py, self.keys())?.as_any().try_iter()?.unbind())
-    }
+    fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyIterator>> { Ok(PyList::new(py, self.keys())?.as_any().try_iter()?.unbind()) }
 
     fn keys(&self) -> Vec<String> {
         match &self.dom.read().unwrap().get(self.id).data {
@@ -370,10 +314,7 @@ impl Attrs {
     }
 
     fn values(&self) -> Vec<String> {
-        match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => attrs.iter().map(|(_, v)| v.clone()).collect(),
-            _ => Vec::new(),
-        }
+        match &self.dom.read().unwrap().get(self.id).data { NodeData::Element { attrs, .. } => attrs.iter().map(|(_, v)| v.clone()).collect(), _ => Vec::new() }
     }
 
     fn items(&self) -> Vec<(String, String)> {
@@ -410,15 +351,10 @@ impl Attrs {
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> PyResult<bool> {
         let d = self.snapshot(other.py())?;
-        match other.cast::<Attrs>() {
-            Ok(o) => d.eq(o.get().snapshot(other.py())?),
-            Err(_) => d.eq(other),
-        }
+        match other.cast::<Attrs>() { Ok(o) => d.eq(o.get().snapshot(other.py())?), Err(_) => d.eq(other) }
     }
 
-    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
-        Ok(self.snapshot(py)?.to_string())
-    }
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> { Ok(self.snapshot(py)?.to_string()) }
 }
 
 /// Parse a complete HTML document; returns the `Document` node.

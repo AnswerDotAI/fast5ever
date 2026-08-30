@@ -14,12 +14,6 @@ categories = ["parser-implementations", "web-programming"]
 name = "fast5ever"
 crate-type = ["cdylib", "rlib"]
 
-[profile.play]
-inherits = "release"
-lto = false
-incremental = true
-codegen-units = 16
-
 [dependencies]
 html5ever = "0.39.0"
 pyo3 = { version = ">=0.28", optional = true }
@@ -32,4 +26,18 @@ extension-module = ["python", "pyo3/extension-module"]
 too_many_arguments = "allow"
 
 [profile.release]
+lto = false
+codegen-units = 16
+
+[profile.release.package.fast5ever]
+incremental = true
+
+[profile.dist]
+inherits = "release"
+lto = true
+incremental = false
+codegen-units = 1
 strip = true
+
+[profile.dist.package.fast5ever]
+incremental = false

@@ -1,8 +1,8 @@
 # fast5ever
 
-WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's [html5ever](https://github.com/servo/html5ever) (the engine written for Servo).
+`fast5ever` parses HTML into a mutable DOM for Python programs. You can inspect and edit nodes, construct elements, and serialize the result as HTML. It uses Servo's [html5ever](https://github.com/servo/html5ever) for WHATWG-compliant parsing and serialization.
 
-html5ever uses the spec's algorithms but does not include the tree. fast5ever adds the missing piece, a fast arena DOM, and exposes both through a small Python API. Parsing, error recovery, and serialization all behave exactly as a browser's `innerHTML` does, because they are the same algorithms.
+html5ever implements the specification's algorithms and requires a separate tree implementation. fast5ever supplies an arena-based DOM and Python bindings. Parsing, error recovery, and serialization follow the same algorithms and produce the same results as a browser's `innerHTML`.
 
 ```python
 from fast5ever import parse, parse_fragment
@@ -21,24 +21,68 @@ doc.to_html()                         # '<!DOCTYPE html><html><head><title>t'...
 
 ## API
 
-- `parse(html)` parses a complete document; `parse_fragment(html, context='body')` parses a fragment in a context element (pass e.g. `context='tbody'` to parse table rows). Both return a `Document` node.
-- Every node is a `Document`, `Element`, `Text`, `Comment`, or `Doctype` - all subclasses of `Node` - so kind checks are `isinstance(c, Text)`. Shared surface: `.name` (tag, or `#document`/`#text`/`#comment`/`#doctype`; writable on elements — `el.name = 'details'` renames in place, keeping attributes and children), `.children`, `.parent`, `to_html()`, `to_text()`. A missing Python property reads the correspondingly hyphenated HTML attribute (`el.data_op` reads `data-op`) and raises `AttributeError` when absent; writes remain explicit through `.attrs`.
-- `el.attrs` is a live mapping in source order: `attrs['k']`, `attrs['k'] = v`, `del attrs['k']`, `in`/`len`/iteration, `get`/`keys`/`values`/`items`/`update`/`pop`, `== {...}` against any mapping; `dict(attrs)` snapshots. (Non-elements read as empty and refuse writes.)
-- `.text` is a text or comment node's own content, writable: `t.text = 'new'`. `template.content` is a `<template>` element's contents as a `Document`.
-- `Element(name, attrs=None)`, `Text(text)`, and `Comment(text)` construct detached nodes to insert. Undefined capitalized module attributes are concise element factories with fastcore.xml-style spelling: `from fast5ever import CustomTag` makes `CustomTag('text', cls='x', data_kind='demo')` construct `<custom-tag class="x" data-kind="demo">text</custom-tag>`. Positional strings become escaped `Text` nodes and positional nodes remain nodes. `fastcore.xml.Safe` and `fastcore.basics.NotStr` are trusted markup: they parse as fragments in the new element's context, so table children and other context-sensitive HTML work correctly.
-- Structure: `append_child`, `insert_before(child, reference)`, `replace_child(new, old)`, `replace(new)`, `unwrap()`, `detach()`. `old.replace(new)` is the convenient form of `old.parent.replace_child(new, old)`; `el.unwrap()` replaces an element with its contents. Inserting a `Document` node splices its children in (DocumentFragment semantics), so `old.replace(parse_fragment(markup))` splices markup in place. Inserting a node from another tree deep-copies it; handles stay valid across all mutations.
+`parse(html)` parses a complete document. `parse_fragment(html, context='body')` parses a fragment in a context element. For example, use `context='tbody'` to parse table rows. Both functions return a `Document` node.
 
-The node API follows the WHATWG DOM's vocabulary, with a pythonic surface (real node classes, attrs as a live mapping, `to_html()`/`to_text()`) modeled on Emil Stenström's [JustHTML](https://github.com/EmilStenstrom/justhtml). The parsing and serialization engine is Servo's [html5ever](https://github.com/servo/html5ever).
+### Nodes and attributes
 
-## Serialization is the spec's
+Every node is a `Document`, `Element`, `Text`, `Comment`, or `Doctype`. These classes inherit from `Node`. Use `isinstance(c, Text)` to check a node's type.
 
-Output spelling comes from html5ever's own serializer - the WHATWG serialization algorithm, byte-for-byte what Chrome's `innerHTML` builds: boolean attributes as `open=""`, double-quoted values, voids without `/`, raw text unescaped inside `script`/`style`. fast5ever adds no styling options and no compatibility shims with other serializers, by design.
+All nodes provide `.name`, `.children`, `.parent`, `to_html()`, and `to_text()`. An element's `.name` is its tag name. Other node names are `#document`, `#text`, `#comment`, and `#doctype`. Assigning `el.name = 'details'` renames an element in place and preserves its attributes and children.
 
-Parsing is also bounded Chromium-style: element nesting beyond 512 flattens at the cap (Chromium's own limit), which keeps adversarially deep input linear-time - html5ever's tree builder alone is quadratic there.
+An undefined Python property reads the corresponding HTML attribute, with underscores converted to hyphens. For example, `el.data_op` reads `data-op`. An absent attribute raises `AttributeError`. Write attributes through `.attrs`.
+
+`el.attrs` is a live mapping in source order. It supports the following operations:
+
+- Read, set, and delete entries with `attrs['k']`, `attrs['k'] = v`, and `del attrs['k']`.
+- Use `in`, `len`, and iteration as with a dictionary.
+- Call `get`, `keys`, `values`, `items`, `update`, and `pop`.
+- Compare with any mapping using `==`, or take a snapshot with `dict(attrs)`.
+
+On non-element nodes, `.attrs` reads as an empty mapping and rejects writes.
+
+`.text` contains a text or comment node's own content. Assign to it with `t.text = 'new'`. `template.content` returns a `<template>` element's contents as a `Document`.
+
+### Constructing elements
+
+`Element(name, attrs=None)`, `Text(text)`, and `Comment(text)` construct detached nodes for insertion.
+
+Undefined capitalized module attributes create element factories using fastcore.xml naming conventions. For example, `from fast5ever import CustomTag` provides a factory for `<custom-tag>`. Calling `CustomTag('text', cls='x', data_kind='demo')` constructs `<custom-tag class="x" data-kind="demo">text</custom-tag>`.
+
+Positional strings become escaped `Text` nodes. Positional nodes remain nodes. `fastcore.xml.Safe` and `fastcore.basics.NotStr` values contain trusted markup. The constructor parses these as fragments in the new element's context, including the context required for table children.
+
+### Changing the tree
+
+Use these methods to insert, replace, or remove nodes:
+
+- `append_child(child)` appends a child.
+- `insert_before(child, reference)` inserts a child before a reference node.
+- `replace_child(new, old)` replaces a child.
+- `old.replace(new)` is shorthand for `old.parent.replace_child(new, old)`.
+- `el.unwrap()` replaces an element with its contents.
+- `detach()` removes a node from its parent.
+
+Inserting a `Document` inserts its children, following DocumentFragment semantics. For example, `old.replace(parse_fragment(markup))` replaces `old` with the parsed markup. Inserting a node from another tree deep-copies it. Node handles stay valid across all mutations.
+
+The API uses WHATWG DOM terminology. Its Python node classes, live attribute mapping, `to_html()`, and `to_text()` are modeled on Emil Stenström's [JustHTML](https://github.com/EmilStenstrom/justhtml).
+
+## Serialization and nesting
+
+fast5ever uses html5ever's implementation of the WHATWG serialization algorithm. Its output matches Chrome's `innerHTML` byte for byte. The output conventions include:
+
+- Boolean attributes have empty values, such as `open=""`.
+- Attribute values use double quotes.
+- Void elements have no closing `/`.
+- Text inside `script` and `style` remains unescaped.
+
+fast5ever provides no serialization formatting options or compatibility shims for other serializers.
+
+Parsing flattens element nesting beyond 512 levels, matching Chromium's limit. This keeps parsing linear-time for deeply nested input. html5ever's tree builder alone takes quadratic time for that input.
 
 ## The Rust API
 
-fast5ever is a Rust crate first (`fast5ever = { git = "https://github.com/AnswerDotAI/fast5ever" }`); the Python API is a thin binding over it, so the two surfaces match verb for verb. The one structural difference: Rust has no node objects - you hold the `Dom` (a `Vec`-indexed arena) and address nodes by `NodeId`, with node 0 (`DOCUMENT`) always the document. Every id stays valid for the life of the `Dom`, however the tree is mutated.
+The Python API binds to the fast5ever Rust crate. Add the crate as a dependency with `fast5ever = { git = "https://github.com/AnswerDotAI/fast5ever" }`.
+
+Both APIs provide the same tree operations. In Rust, you hold a `Dom` containing a `Vec`-indexed arena and address its nodes by `NodeId`. There are no separate node objects. Node 0 (`DOCUMENT`) is always the document. Every id stays valid for the life of the `Dom`, including after tree mutations.
 
 ```rust
 use fast5ever::{parse_fragment, DOCUMENT};
@@ -52,7 +96,9 @@ dom.append_child(p, extra).unwrap();        // a document node splices its child
 assert_eq!(dom.to_html(DOCUMENT), r#"<p class="lead">one<b>!</b></p><p>two</p>"#);
 ```
 
-Reads mirror the Python names (`children`, `parent`, `attr`, `to_html`, `to_text`); writes return `Result` where Python raises (`set_attr`, `set_text`, `append_child`, `insert_before`, `replace_child`, `detach`); construction is `create_element`/`create_text`/`create_comment` (Python's `Element`/`Text`/`Comment`); and Rust additionally exposes `NodeData` matching for direct tree inspection.
+Read methods use the Python names: `children`, `parent`, `attr`, `to_html`, and `to_text`. Mutation methods return `Result` where Python raises an exception. These include `set_attr`, `set_text`, `append_child`, `insert_before`, `replace_child`, and `detach`.
+
+Construct nodes with `create_element`, `create_text`, and `create_comment`, corresponding to Python's `Element`, `Text`, and `Comment`. Rust also provides `NodeData` matching for direct tree inspection.
 
 
 ## Development
@@ -62,11 +108,11 @@ pip install -e .[dev]
 maturin develop && pytest -q
 ```
 
-All tests are pytest; `cargo check`/`cargo clippy` stay warning-free and need no Python (pyo3 sits behind the `python` feature).
+All tests use pytest. `cargo check` and `cargo clippy` run without warnings and do not need Python. The `python` feature enables pyo3.
 
 ## Release
 
-Release flow: tag-push (CI publishes), then the version bump, all in one command.
+`ship-release` pushes a tag for CI to publish, then bumps the version.
 
 ```bash
 maturin develop && pytest -q

@@ -78,6 +78,32 @@ def test_navigation():
     assert div != span and div == frag.children[0] and div != 'div'
 
 
+def test_element_queries():
+    root = parse_fragment('text<!--comment--><a class="one\ttwo\nthree\rfour\ffive"></a>'
+                          '<svg><a class="foreign"></a></svg><math><mi>x</mi></math>'
+                          '<template><b>inert</b></template>')
+    a, svg, math, template = root.element_children
+    assert [n.name for n in root.element_children] == ['a', 'svg', 'math', 'template']
+    assert a.is_tag('a') and not a.is_tag('A')
+    foreign = svg.element_children[0]
+    assert foreign.name == a.name and not foreign.is_tag('a')
+    assert foreign.is_tag('a', namespace='http://www.w3.org/2000/svg')
+    assert not a.is_tag('a', namespace='http://www.w3.org/2000/svg')
+    assert math.is_tag('math', namespace='http://www.w3.org/1998/Math/MathML')
+    assert all(a.has_class(c) for c in ('one', 'two', 'three', 'four', 'five'))
+    assert not any(a.has_class(c) for c in ('', 'on', 'One', 'one two'))
+    a.attrs['class'] = 'one\u00a0two'
+    assert a.has_class('one\u00a0two') and not a.has_class('one')
+    assert foreign.has_class('foreign')
+    assert template.element_children == []
+    assert template.content.element_children[0].is_tag('b')
+    for n in (root, *root.children[:2]):
+        assert not n.is_tag('a') and not n.has_class('one')
+    assert root.children[0].element_children == []
+    a.detach()
+    assert a.is_tag('a') and a not in root.element_children
+
+
 def test_to_text(): assert parse_fragment('<p>a<b>b</b></p><p>c</p>').to_text() == 'abc'
 
 
@@ -254,6 +280,44 @@ def test_attrs_as_node_properties():
     el.attrs['data-op'] = 'mediawiki:transclude'
     assert el.data_op == 'mediawiki:transclude'
     with pytest.raises(AttributeError): el.missing
+
+
+@pytest.mark.parametrize('pairs', [
+    [('href', 'local'), ('xlink:href', 'foreign')],
+    [('xlink:href', 'foreign'), ('href', 'local')],
+])
+def test_qualified_attrs(pairs):
+    src = ' '.join(f'{k}="{v}"' for k, v in pairs)
+    frag = parse_fragment(f'<svg><a {src}></a></svg>')
+    a = frag.children[0].children[0].attrs
+    assert dict(a) == dict(pairs) and a == dict(pairs)
+    assert len(a) == 2 and list(a) == a.keys() == [k for k, v in pairs]
+    assert a.items() == pairs and a.values() == [v for k, v in pairs]
+    a.update({'href': 'new-local', 'xlink:href': 'new-foreign'})
+    assert a['href'] == 'new-local' and a['xlink:href'] == 'new-foreign'
+    assert 'xlink:href="new-foreign"' in frag.to_html()
+    del a['href']
+    assert 'href' not in a and a.get('href') is None
+    assert a['xlink:href'] == 'new-foreign'
+    a['href'] = 'restored'
+    assert a.pop('xlink:href') == 'new-foreign'
+    assert dict(a) == {'href': 'restored'}
+    assert frag.to_html() == '<svg><a href="restored"></a></svg>'
+
+
+def test_xml_attrs_and_literal_colons():
+    expected = {'xmlns': 'http://www.w3.org/2000/svg', 'xmlns:xlink': 'http://www.w3.org/1999/xlink',
+                'lang': 'en', 'xml:lang': 'fr', 'custom:key': 'value'}
+    src = ' '.join(f'{k}="{v}"' for k, v in expected.items())
+    # Foreign attributes are namespace-adjusted in SVG, but literal names in HTML.
+    for tag in ('svg', 'div'):
+        el = parse_fragment(f'<{tag} {src}></{tag}>').children[0]
+        assert dict(el.attrs) == expected
+        el.attrs['xml:lang'] = 'de'
+        assert el.attrs['lang'] == 'en' and el.attrs['xml:lang'] == 'de'
+        assert 'xml:lang="de"' in el.to_html()
+        del el.attrs['xml:lang']
+        assert el.attrs['lang'] == 'en' and 'xml:lang' not in el.attrs
 
 
 def test_attrs_non_element():

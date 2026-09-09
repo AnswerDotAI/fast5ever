@@ -29,6 +29,12 @@ Every node is a `Document`, `Element`, `Text`, `Comment`, or `Doctype`. These cl
 
 All nodes provide `.name`, `.children`, `.parent`, `to_html()`, and `to_text()`. An element's `.name` is its tag name. Other node names are `#document`, `#text`, `#comment`, and `#doctype`. Assigning `el.name = 'details'` renames an element in place and preserves its attributes and children.
 
+For element queries:
+
+- `.element_children` returns direct element children in order, including SVG/MathML elements but excluding text and comments. It does not enter template contents; use `template.content.element_children` for those.
+- `el.is_tag('a')` matches an HTML anchor, not an SVG anchor. Pass a namespace URL explicitly for foreign elements: `el.is_tag('a', namespace='http://www.w3.org/2000/svg')`. Names are case-sensitive; `.name` remains the local name regardless of namespace.
+- `el.has_class('lead')` checks a complete, case-sensitive class token, separated by HTML's ASCII whitespace. Non-elements return `False` for both predicates.
+
 An undefined Python property reads the corresponding HTML attribute, with underscores converted to hyphens. For example, `el.data_op` reads `data-op`. An absent attribute raises `AttributeError`. Write attributes through `.attrs`.
 
 `el.attrs` is a live mapping in source order. It supports the following operations:
@@ -97,6 +103,8 @@ assert_eq!(dom.to_html(DOCUMENT), r#"<p class="lead">one<b>!</b></p><p>two</p>"#
 ```
 
 Read methods use the Python names: `children`, `parent`, `attr`, `to_html`, and `to_text`. Mutation methods return `Result` where Python raises an exception. These include `set_attr`, `set_text`, `append_child`, `insert_before`, `replace_child`, and `detach`.
+
+Element queries are `dom.element_children(id)`, `dom.tag(id)` (the local name, or `None` for non-elements), `dom.is_tag(id, "a", None)` (`None` selects HTML; `Some(url)` selects another namespace), and `dom.has_class(id, "lead")`.
 
 Construct nodes with `create_element`, `create_text`, and `create_comment`, corresponding to Python's `Element`, `Text`, and `Comment`. Rust also provides `NodeData` matching for direct tree inspection.
 

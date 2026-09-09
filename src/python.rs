@@ -7,7 +7,7 @@ use pyo3::exceptions::{PyAttributeError, PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyIterator, PyList, PyTuple};
 
-use crate::dom::{Dom, DomError, NodeData, NodeId};
+use crate::dom::{Dom, DomError, NodeData, NodeId, attr_name};
 
 impl From<DomError> for PyErr { fn from(e: DomError) -> PyErr { PyValueError::new_err(e.to_string()) } }
 
@@ -151,6 +151,20 @@ impl Node {
         ids.into_iter().map(|c| make_node(py, self.dom.clone(), c)).collect()
     }
 
+    /// Direct element children in source order, including foreign elements; does not enter templates.
+    #[getter]
+    fn element_children(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
+        let ids = self.dom.read().unwrap().element_children(self.id);
+        ids.into_iter().map(|c| make_node(py, self.dom.clone(), c)).collect()
+    }
+
+    /// Match an exact local name and namespace URL (`None` means HTML).
+    #[pyo3(signature = (tag, namespace=None))]
+    fn is_tag(&self, tag: &str, namespace: Option<&str>) -> bool { self.dom.read().unwrap().is_tag(self.id, tag, namespace) }
+
+    /// Case-sensitive membership in the element's space-separated class tokens.
+    fn has_class(&self, class: &str) -> bool { self.dom.read().unwrap().has_class(self.id, class) }
+
     #[getter]
     fn parent(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let p = self.dom.read().unwrap().parent(self.id);
@@ -276,14 +290,15 @@ impl Comment {
 
 /// One element's attributes as a live mapping: reads always see the tree as
 /// it is, and writes go straight to it. Compares equal to any mapping with
-/// the same items; `dict(attrs)` takes a snapshot.
+/// the same items; `dict(attrs)` takes a snapshot. Keys are qualified names
+/// (`href` and `xlink:href` are distinct), not just local names.
 #[pyclass(frozen, module = "fast5ever")]
 pub struct Attrs { dom: Arc<RwLock<Dom>>, id: NodeId }
 
 impl Attrs {
     fn snapshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let d = PyDict::new(py);
-        if let NodeData::Element { attrs, .. } = &self.dom.read().unwrap().get(self.id).data { for (n, v) in attrs { d.set_item(n.local.as_ref(), v)?; } }
+        if let NodeData::Element { attrs, .. } = &self.dom.read().unwrap().get(self.id).data { for (n, v) in attrs { d.set_item(attr_name(n).as_ref(), v)?; } }
         Ok(d)
     }
 }
@@ -308,7 +323,7 @@ impl Attrs {
 
     fn keys(&self) -> Vec<String> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, _)| n.local.to_string()).collect(),
+            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, _)| attr_name(n).into_owned()).collect(),
             _ => Vec::new(),
         }
     }
@@ -319,7 +334,7 @@ impl Attrs {
 
     fn items(&self) -> Vec<(String, String)> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, v)| (n.local.to_string(), v.clone())).collect(),
+            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, v)| (attr_name(n).into_owned(), v.clone())).collect(),
             _ => Vec::new(),
         }
     }

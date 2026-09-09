@@ -19,6 +19,14 @@ use crate::depth::DepthCap;
 
 pub type NodeId = usize;
 
+/// Qualified attribute spelling, rather than the potentially ambiguous local name.
+pub(crate) fn attr_name(name: &QualName) -> Cow<'_, str> {
+    match name.prefix.as_deref().filter(|p| !p.is_empty()) {
+        Some(prefix) => Cow::Owned(format!("{prefix}:{}", name.local)),
+        None => Cow::Borrowed(&name.local),
+    }
+}
+
 /// One DOM node's payload. Elements hold their attributes in source order.
 #[derive(Debug, Clone)]
 pub enum NodeData {
@@ -72,6 +80,24 @@ impl Dom {
     pub fn get(&self, id: NodeId) -> &Node { &self.nodes[id] }
 
     pub fn children(&self, id: NodeId) -> &[NodeId] { &self.nodes[id].children }
+
+    /// Direct element children in source order, in any namespace. Does not enter template contents.
+    pub fn element_children(&self, id: NodeId) -> Vec<NodeId> { self.children(id).iter().copied().filter(|&c| self.tag(c).is_some()).collect() }
+
+    /// Local element name, regardless of namespace; `None` for non-elements.
+    /// Use `is_tag` when matching a name in a particular namespace.
+    pub fn tag(&self, id: NodeId) -> Option<&str> { match &self.get(id).data { NodeData::Element { name, .. } => Some(&name.local), _ => None } }
+
+    /// Match an exact local name and namespace URL. `None` means the HTML namespace.
+    pub fn is_tag(&self, id: NodeId, tag: &str, namespace: Option<&str>) -> bool {
+        matches!(&self.get(id).data, NodeData::Element { name, .. }
+            if name.local.as_ref() == tag && name.ns.as_ref() == namespace.unwrap_or("http://www.w3.org/1999/xhtml"))
+    }
+
+    /// Whether ASCII-whitespace-separated class tokens contain `class` (case-sensitive).
+    pub fn has_class(&self, id: NodeId, class: &str) -> bool {
+        self.attr(id, "class").is_some_and(|classes| classes.split_ascii_whitespace().any(|c| c == class))
+    }
 
     pub fn parent(&self, id: NodeId) -> Option<NodeId> { self.nodes[id].parent }
 
@@ -132,15 +158,17 @@ impl Dom {
 
     // --- attributes ---
 
+    /// Look up an attribute by qualified name: `href` and `xlink:href` are distinct.
     pub fn attr(&self, id: NodeId, name: &str) -> Option<&str> {
-        match &self.nodes[id].data { NodeData::Element { attrs, .. } => attrs.iter().find(|(n, _)| &*n.local == name).map(|(_, v)| v.as_str()), _ => None }
+        match &self.nodes[id].data { NodeData::Element { attrs, .. } => attrs.iter().find(|(n, _)| attr_name(n) == name).map(|(_, v)| v.as_str()), _ => None }
     }
 
-    /// Set (or add, preserving order for existing keys) an attribute.
+    /// Set an attribute by qualified name, preserving its namespace and position.
+    /// A new attribute has no namespace; this does not resolve namespace prefixes.
     pub fn set_attr(&mut self, id: NodeId, name: &str, value: &str) -> Result<(), DomError> {
         match &mut self.nodes[id].data {
             NodeData::Element { attrs, .. } => {
-                if let Some(slot) = attrs.iter_mut().find(|(n, _)| &*n.local == name) { slot.1 = value.to_string(); }
+                if let Some(slot) = attrs.iter_mut().find(|(n, _)| attr_name(n) == name) { slot.1 = value.to_string(); }
                 else { attrs.push((QualName::new(None, ns!(), LocalName::from(name)), value.to_string())); }
                 Ok(())
             }
@@ -152,7 +180,7 @@ impl Dom {
     pub fn remove_attr(&mut self, id: NodeId, name: &str) -> Result<Option<String>, DomError> {
         match &mut self.nodes[id].data {
             NodeData::Element { attrs, .. } => {
-                let pos = attrs.iter().position(|(n, _)| &*n.local == name);
+                let pos = attrs.iter().position(|(n, _)| attr_name(n) == name);
                 Ok(pos.map(|i| attrs.remove(i).1))
             }
             _ => Err(DomError::NotAnElement),
@@ -510,4 +538,50 @@ fn into_fragment(mut dom: Dom) -> Dom {
         dom.nodes[DOCUMENT].children.splice(pos..=pos, kids);
     }
     dom
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn element_queries_are_shallow_and_namespace_aware() {
+        let dom = parse_fragment("text<!--c--><a class='one two'></a><svg><a/></svg><template><b/></template>", "body");
+        let els = dom.element_children(DOCUMENT);
+        assert_eq!(els.len(), 3);
+        let (a, svg, template) = (els[0], els[1], els[2]);
+        let foreign = dom.element_children(svg)[0];
+        assert_eq!(dom.tag(a), dom.tag(foreign));
+        assert!(dom.is_tag(a, "a", None));
+        assert!(!dom.is_tag(foreign, "a", None));
+        assert!(dom.is_tag(foreign, "a", Some("http://www.w3.org/2000/svg")));
+        assert!(dom.has_class(a, "two"));
+        assert!(!dom.has_class(a, "tw"));
+        assert_eq!(dom.tag(DOCUMENT), None);
+        assert!(!dom.is_tag(DOCUMENT, "a", None));
+        assert!(!dom.has_class(DOCUMENT, "one"));
+        assert!(dom.element_children(template).is_empty());
+        let NodeData::Element { template_contents: Some(content), .. } = dom.get(template).data else { panic!("expected template") };
+        assert!(dom.is_tag(dom.element_children(content)[0], "b", None));
+    }
+
+    #[test]
+    fn qualified_attr_mutation_preserves_namespace() {
+        let mut dom = parse_fragment("<svg><a xlink:href='foreign'></a></svg>", "body");
+        let svg = dom.children(DOCUMENT)[0];
+        let a = dom.children(svg)[0];
+        let NodeData::Element { attrs, .. } = &dom.get(a).data else { panic!("expected element") };
+        let name = attrs[0].0.clone();
+        assert_eq!(name.ns, ns!(xlink));
+        assert_eq!(dom.attr(a, "href"), None);
+        assert_eq!(dom.remove_attr(a, "href"), Ok(None));
+        dom.set_attr(a, "href", "local").unwrap();
+        dom.set_attr(a, "xlink:href", "changed").unwrap();
+        let NodeData::Element { attrs, .. } = &dom.get(a).data else { panic!("expected element") };
+        assert_eq!(attrs[0].0, name);
+        assert_eq!(attrs[1].0.ns, ns!());
+        assert_eq!(dom.attr(a, "xlink:href"), Some("changed"));
+        assert_eq!(dom.remove_attr(a, "xlink:href"), Ok(Some("changed".into())));
+        assert_eq!(dom.attr(a, "href"), Some("local"));
+    }
 }

@@ -1,12 +1,12 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.9.2,<2.0"]
 build-backend = "maturin"
 
 [project]
 name = "fast5ever"
 dynamic = ["version"]
 description = "WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's html5ever"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 requires-python = ">=3.10"
 readme = "README.md"
 authors = [{name = "Jeremy Howard", email = "github@jhoward.fastmail.fm"}]

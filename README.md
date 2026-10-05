@@ -113,7 +113,7 @@ Construct nodes with `create_element`, `create_text`, and `create_comment`, corr
 
 ```bash
 pip install -e .[dev]
-maturin develop && pytest -q
+cargo develop && pytest -q
 ```
 
 All tests use pytest. `cargo check` and `cargo clippy` run without warnings and do not need Python. The `python` feature enables pyo3.
@@ -123,7 +123,7 @@ All tests use pytest. `cargo check` and `cargo clippy` run without warnings and 
 `ship-release` pushes a tag for CI to publish, then bumps the version.
 
 ```bash
-maturin develop && pytest -q
+cargo develop && pytest -q
 ship-release
 ```
 

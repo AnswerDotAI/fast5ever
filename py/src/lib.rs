@@ -7,9 +7,9 @@ use pyo3::exceptions::{PyAttributeError, PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyIterator, PyList, PyTuple};
 
-use crate::dom::{Dom, DomError, NodeData, NodeId, attr_name};
+use fast5ever::{Dom, DomError, NodeData, NodeId, attr_name};
 
-impl From<DomError> for PyErr { fn from(e: DomError) -> PyErr { PyValueError::new_err(e.to_string()) } }
+fn py_error(e: DomError) -> PyErr { PyValueError::new_err(e.to_string()) }
 
 /// The base node handle: every node is an instance of one of the concrete
 /// classes below (`isinstance(n, Node)` matches any kind). Handles stay
@@ -85,10 +85,7 @@ impl Node {
     /// The other node's id in self's arena, importing a deep copy when the
     /// two handles belong to different trees.
     fn local_id(&self, other: &Node) -> NodeId {
-        if Arc::ptr_eq(&self.dom, &other.dom) { other.id } else {
-            let foreign = other.dom.read().unwrap();
-            self.dom.write().unwrap().import(&foreign, other.id)
-        }
+        if Arc::ptr_eq(&self.dom, &other.dom) { other.id } else { let foreign = other.dom.read().unwrap(); self.dom.write().unwrap().import(&foreign, other.id) }
     }
 }
 
@@ -117,7 +114,7 @@ impl Node {
     /// Rename the element in place (`el.name = "details"`), keeping its
     /// attributes and children; raises for non-elements.
     #[setter]
-    fn set_name(&self, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().rename(self.id, value)?) }
+    fn set_name(&self, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().rename(self.id, value).map_err(py_error)?) }
 
     /// The element's attributes as a live mapping: reads see the tree as it
     /// is, and `attrs[k] = v` / `del attrs[k]` write straight through.
@@ -143,7 +140,7 @@ impl Node {
     }
 
     #[setter]
-    fn set_text(&self, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().set_text(self.id, value)?) }
+    fn set_text(&self, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().set_text(self.id, value).map_err(py_error)?) }
 
     #[getter]
     fn children(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
@@ -191,7 +188,7 @@ impl Node {
     /// deep-copied first.
     fn append_child(&self, child: &Node) -> PyResult<()> {
         let id = self.local_id(child);
-        self.dom.write().unwrap().append_child(self.id, id)?;
+        self.dom.write().unwrap().append_child(self.id, id).map_err(py_error)?;
         Ok(())
     }
 
@@ -201,7 +198,7 @@ impl Node {
     fn insert_before(&self, child: &Node, reference: Option<&Node>) -> PyResult<()> {
         let id = self.local_id(child);
         let reference = reference.map(|r| r.id);
-        self.dom.write().unwrap().insert_before(self.id, id, reference)?;
+        self.dom.write().unwrap().insert_before(self.id, id, reference).map_err(py_error)?;
         Ok(())
     }
 
@@ -209,7 +206,7 @@ impl Node {
     /// detached but its handle stays usable.
     fn replace_child(&self, new: &Node, old: &Node) -> PyResult<()> {
         let id = self.local_id(new);
-        self.dom.write().unwrap().replace_child(self.id, id, old.id)?;
+        self.dom.write().unwrap().replace_child(self.id, id, old.id).map_err(py_error)?;
         Ok(())
     }
 
@@ -218,14 +215,14 @@ impl Node {
     fn replace(&self, new: &Node) -> PyResult<()> {
         let parent = self.dom.read().unwrap().parent(self.id).ok_or_else(|| PyValueError::new_err("cannot replace a detached node"))?;
         let id = self.local_id(new);
-        self.dom.write().unwrap().replace_child(parent, id, self.id)?;
+        self.dom.write().unwrap().replace_child(parent, id, self.id).map_err(py_error)?;
         Ok(())
     }
 
     /// Replace this element with its contents. Raises when detached or not an element.
     fn unwrap(&self) -> PyResult<()> {
         if self.dom.read().unwrap().parent(self.id).is_none() { return Err(PyValueError::new_err("cannot unwrap a detached node")); }
-        Ok(self.dom.write().unwrap().unwrap(self.id)?)
+        Ok(self.dom.write().unwrap().unwrap(self.id).map_err(py_error)?)
     }
 
     /// Detach this node from its parent (no-op when already detached).
@@ -263,7 +260,7 @@ impl Element {
     fn new(name: &str, attrs: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Element>> {
         let mut dom = Dom::new();
         let id = dom.create_element(name, &[]);
-        if let Some(attrs) = attrs { for (k, v) in attrs { dom.set_attr(id, &k.extract::<String>()?, &v.extract::<String>()?)?; } }
+        if let Some(attrs) = attrs { for (k, v) in attrs { dom.set_attr(id, &k.extract::<String>()?, &v.extract::<String>()?).map_err(py_error)?; } }
         Ok(PyClassInitializer::from(detached(dom, id)).add_subclass(Element))
     }
 }
@@ -309,10 +306,10 @@ impl Attrs {
         self.dom.read().unwrap().attr(self.id, key).map(str::to_string).ok_or_else(|| PyKeyError::new_err(key.to_string()))
     }
 
-    fn __setitem__(&self, key: &str, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().set_attr(self.id, key, value)?) }
+    fn __setitem__(&self, key: &str, value: &str) -> PyResult<()> { Ok(self.dom.write().unwrap().set_attr(self.id, key, value).map_err(py_error)?) }
 
     fn __delitem__(&self, key: &str) -> PyResult<()> {
-        match self.dom.write().unwrap().remove_attr(self.id, key)? { Some(_) => Ok(()), None => Err(PyKeyError::new_err(key.to_string())) }
+        match self.dom.write().unwrap().remove_attr(self.id, key).map_err(py_error)? { Some(_) => Ok(()), None => Err(PyKeyError::new_err(key.to_string())) }
     }
 
     fn __contains__(&self, key: &str) -> bool { self.dom.read().unwrap().attr(self.id, key).is_some() }
@@ -349,7 +346,7 @@ impl Attrs {
 
     #[pyo3(signature = (key, *default))]
     fn pop(&self, py: Python<'_>, key: &str, default: &Bound<'_, PyTuple>) -> PyResult<Py<PyAny>> {
-        match self.dom.write().unwrap().remove_attr(self.id, key)? {
+        match self.dom.write().unwrap().remove_attr(self.id, key).map_err(py_error)? {
             Some(v) => Ok(v.into_pyobject(py)?.into_any().unbind()),
             None if default.is_empty() => Err(PyKeyError::new_err(key.to_string())),
             None => Ok(default.get_item(0)?.unbind()),
@@ -359,7 +356,7 @@ impl Attrs {
     fn update(&self, other: &Bound<'_, PyAny>) -> PyResult<()> {
         for pair in other.call_method0("items")?.try_iter()? {
             let (k, v): (String, String) = pair?.extract()?;
-            self.dom.write().unwrap().set_attr(self.id, &k, &v)?;
+            self.dom.write().unwrap().set_attr(self.id, &k, &v).map_err(py_error)?;
         }
         Ok(())
     }
@@ -375,8 +372,8 @@ impl Attrs {
 /// Parse a complete HTML document; returns the `Document` node.
 #[pyfunction]
 fn parse(py: Python<'_>, html: &str) -> PyResult<Py<Document>> {
-    let dom = Arc::new(RwLock::new(py.detach(|| crate::dom::parse(html))));
-    Py::new(py, PyClassInitializer::from(Node { dom, id: crate::dom::DOCUMENT }).add_subclass(Document))
+    let dom = Arc::new(RwLock::new(py.detach(|| fast5ever::parse(html))));
+    Py::new(py, PyClassInitializer::from(Node { dom, id: fast5ever::DOCUMENT }).add_subclass(Document))
 }
 
 /// Parse a fragment as the children of a `context` element (default `body`,
@@ -385,8 +382,8 @@ fn parse(py: Python<'_>, html: &str) -> PyResult<Py<Document>> {
 #[pyfunction]
 #[pyo3(signature = (html, context="body"))]
 fn parse_fragment(py: Python<'_>, html: &str, context: &str) -> PyResult<Py<Document>> {
-    let dom = Arc::new(RwLock::new(py.detach(|| crate::dom::parse_fragment(html, context))));
-    Py::new(py, PyClassInitializer::from(Node { dom, id: crate::dom::DOCUMENT }).add_subclass(Document))
+    let dom = Arc::new(RwLock::new(py.detach(|| fast5ever::parse_fragment(html, context))));
+    Py::new(py, PyClassInitializer::from(Node { dom, id: fast5ever::DOCUMENT }).add_subclass(Document))
 }
 
 #[pymodule]

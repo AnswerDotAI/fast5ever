@@ -1,7 +1,15 @@
-[package]
-name = "fast5ever"
+[workspace]
+members = ["py"]
+default-members = [".", "py"]
+
+[workspace.package]
 version = "0.1.7"
 edition = "2024"
+
+[package]
+name = "fast5ever"
+version.workspace = true
+edition.workspace = true
 license = "Apache-2.0"
 description = "WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's html5ever"
 repository = "https://github.com/AnswerDotAI/fast5ever"
@@ -12,24 +20,24 @@ categories = ["parser-implementations", "web-programming"]
 
 [lib]
 name = "fast5ever"
-crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 html5ever = "0.39.0"
-pyo3 = { version = ">=0.28", optional = true }
-
-[features]
-python = ["dep:pyo3"]
-extension-module = ["python", "pyo3/extension-module"]
 
 [lints.clippy]
 too_many_arguments = "allow"
+
+[profile.test]
+inherits = "release"
 
 [profile.release]
 lto = false
 codegen-units = 16
 
 [profile.release.package.fast5ever]
+incremental = true
+
+[profile.release.package.fast5ever-py]
 incremental = true
 
 [profile.dist]
@@ -40,4 +48,7 @@ codegen-units = 1
 strip = true
 
 [profile.dist.package.fast5ever]
+incremental = false
+
+[profile.dist.package.fast5ever-py]
 incremental = false

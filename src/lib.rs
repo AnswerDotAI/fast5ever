@@ -4,8 +4,6 @@
 
 mod depth;
 mod dom;
-#[cfg(feature = "python")]
-mod python;
 
 pub use depth::MAX_DEPTH;
-pub use dom::{DOCUMENT, Dom, DomError, Node, NodeData, NodeId, parse, parse_fragment};
+pub use dom::{DOCUMENT, Dom, DomError, Node, NodeData, NodeId, attr_name, parse, parse_fragment};

@@ -20,7 +20,7 @@ use crate::depth::DepthCap;
 pub type NodeId = usize;
 
 /// Qualified attribute spelling, rather than the potentially ambiguous local name.
-pub(crate) fn attr_name(name: &QualName) -> Cow<'_, str> {
+pub fn attr_name(name: &QualName) -> Cow<'_, str> {
     match name.prefix.as_deref().filter(|p| !p.is_empty()) {
         Some(prefix) => Cow::Owned(format!("{prefix}:{}", name.local)),
         None => Cow::Borrowed(&name.local),
@@ -120,10 +120,7 @@ impl Dom {
 
     // --- creation ---
 
-    fn push(&mut self, data: NodeData) -> NodeId {
-        self.nodes.push(Node { parent: None, children: Vec::new(), data });
-        self.nodes.len() - 1
-    }
+    fn push(&mut self, data: NodeData) -> NodeId { self.nodes.push(Node { parent: None, children: Vec::new(), data }); self.nodes.len() - 1 }
 
     /// Create a detached html-namespace element.
     pub fn create_element(&mut self, name: &str, attrs: &[(&str, &str)]) -> NodeId {
@@ -217,10 +214,7 @@ impl Dom {
     pub fn detach(&mut self, id: NodeId) { if let Some(p) = self.nodes[id].parent.take() { self.nodes[p].children.retain(|&c| c != id); } }
 
     fn is_ancestor(&self, maybe_ancestor: NodeId, mut node: NodeId) -> bool {
-        loop {
-            if node == maybe_ancestor { return true; }
-            match self.nodes[node].parent { Some(p) => node = p, None => return false }
-        }
+        loop { if node == maybe_ancestor { return true; } match self.nodes[node].parent { Some(p) => node = p, None => return false } }
     }
 
     /// The ids an insertion of `child` will actually splice in: a document
@@ -231,10 +225,7 @@ impl Dom {
             let kids = std::mem::take(&mut self.nodes[child].children);
             for &k in &kids { self.nodes[k].parent = None; }
             kids
-        } else {
-            self.detach(child);
-            vec![child]
-        }
+        } else { self.detach(child); vec![child] }
     }
 
     fn insert_ids(&mut self, parent: NodeId, index: usize, ids: &[NodeId]) {

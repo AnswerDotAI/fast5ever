@@ -23,25 +23,8 @@ pub const MAX_DEPTH: usize = 512;
 /// HTML void elements: their start tags never deepen the tree.
 fn is_void(name: &str) -> bool {
     matches!(
-        name,
-        "area"
-            | "base"
-            | "basefont"
-            | "bgsound"
-            | "br"
-            | "col"
-            | "embed"
-            | "frame"
-            | "hr"
-            | "img"
-            | "input"
-            | "keygen"
-            | "link"
-            | "meta"
-            | "param"
-            | "source"
-            | "track"
-            | "wbr"
+        name, "area" | "base" | "basefont" | "bgsound" | "br" | "col" | "embed" | "frame" | "hr" | "img" | "input" | "keygen" | "link" | "meta" | "param"
+            | "source" | "track" | "wbr"
     )
 }
 
@@ -49,26 +32,8 @@ fn is_void(name: &str) -> bool {
 /// sibling runs of sloppy markup (`<p><p><p>...`) don't count toward depth.
 fn closes_same(name: &str) -> bool {
     matches!(
-        name,
-        "p" | "li"
-            | "dt"
-            | "dd"
-            | "tr"
-            | "td"
-            | "th"
-            | "option"
-            | "optgroup"
-            | "caption"
-            | "colgroup"
-            | "thead"
-            | "tbody"
-            | "tfoot"
-            | "h1"
-            | "h2"
-            | "h3"
-            | "h4"
-            | "h5"
-            | "h6"
+        name, "p" | "li" | "dt" | "dd" | "tr" | "td" | "th" | "option" | "optgroup" | "caption" | "colgroup" | "thead" | "tbody" | "tfoot" | "h1" | "h2" | "h3"
+            | "h4" | "h5" | "h6"
     )
 }
 
@@ -95,18 +60,13 @@ impl<S: TokenSink> TokenSink for DepthCap<S> {
                         let mut open = self.open.borrow_mut();
                         if closes_same(&tag.name) && open.last() == Some(&tag.name) {
                             // replaces its sibling: depth unchanged
-                        } else if open.len() >= MAX_DEPTH {
-                            self.swallowed.borrow_mut().push(tag.name.clone());
-                            return TokenSinkResult::Continue;
-                        } else { open.push(tag.name.clone()); }
+                        } else if open.len() >= MAX_DEPTH { self.swallowed.borrow_mut().push(tag.name.clone()); return TokenSinkResult::Continue; }
+                        else { open.push(tag.name.clone()); }
                     }
                 }
                 TagKind::EndTag => {
                     let mut swallowed = self.swallowed.borrow_mut();
-                    if swallowed.last() == Some(&tag.name) {
-                        swallowed.pop();
-                        return TokenSinkResult::Continue;
-                    }
+                    if swallowed.last() == Some(&tag.name) { swallowed.pop(); return TokenSinkResult::Continue; }
                     let mut open = self.open.borrow_mut();
                     if let Some(pos) = open.iter().rposition(|n| *n == tag.name) { open.truncate(pos); }
                 }

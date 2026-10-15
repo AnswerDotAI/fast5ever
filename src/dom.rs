@@ -22,20 +22,15 @@ pub type NodeId = usize;
 /// Qualified attribute spelling, rather than the potentially ambiguous local name.
 pub fn attr_name(name: &QualName) -> Cow<'_, str> {
     match name.prefix.as_deref().filter(|p| !p.is_empty()) {
-        Some(prefix) => Cow::Owned(format!("{prefix}:{}", name.local)),
-        None => Cow::Borrowed(&name.local),
+        Some(prefix) => Cow::Owned(format!("{prefix}:{}", name.local)), None => Cow::Borrowed(&name.local)
     }
 }
 
 /// One DOM node's payload. Elements hold their attributes in source order.
 #[derive(Debug, Clone)]
 pub enum NodeData {
-    Document,
-    Doctype { name: String, public_id: String, system_id: String },
-    Text { contents: String },
-    Comment { contents: String },
-    Element { name: QualName, attrs: Vec<(QualName, String)>, template_contents: Option<NodeId> },
-    ProcessingInstruction { target: String, contents: String },
+    Document, Doctype { name: String, public_id: String, system_id: String }, Text { contents: String }, Comment { contents: String },
+    Element { name: QualName, attrs: Vec<(QualName, String)>, template_contents: Option<NodeId> }, ProcessingInstruction { target: String, contents: String }
 }
 
 #[derive(Debug, Clone)]
@@ -43,20 +38,13 @@ pub struct Node { pub parent: Option<NodeId>, pub children: Vec<NodeId>, pub dat
 
 /// A structural mutation that cannot be applied.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DomError {
-    NotAChild,
-    WouldCycle,
-    NotAnElement,
-    NotTextual,
-}
+pub enum DomError { NotAChild, WouldCycle, NotAnElement, NotTextual }
 
 impl fmt::Display for DomError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DomError::NotAChild => write!(f, "reference node is not a child of this node"),
-            DomError::WouldCycle => {
-                write!(f, "inserting a node inside itself would create a cycle")
-            }
+            DomError::WouldCycle => { write!(f, "inserting a node inside itself would create a cycle") }
             DomError::NotAnElement => write!(f, "operation requires an element node"),
             DomError::NotTextual => write!(f, "operation requires a text or comment node"),
         }
@@ -75,7 +63,9 @@ pub const DOCUMENT: NodeId = 0;
 
 impl Dom {
     /// An empty tree: just a document node.
-    pub fn new() -> Dom { Dom { nodes: vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }], quirks_mode: QuirksMode::NoQuirks } }
+    pub fn new() -> Dom {
+        Dom { nodes: vec![Node { parent: None, children: Vec::new(), data: NodeData::Document }], quirks_mode: QuirksMode::NoQuirks }
+    }
 
     pub fn get(&self, id: NodeId) -> &Node { &self.nodes[id] }
 
@@ -176,10 +166,7 @@ impl Dom {
     /// Remove an attribute; returns its value if present.
     pub fn remove_attr(&mut self, id: NodeId, name: &str) -> Result<Option<String>, DomError> {
         match &mut self.nodes[id].data {
-            NodeData::Element { attrs, .. } => {
-                let pos = attrs.iter().position(|(n, _)| attr_name(n) == name);
-                Ok(pos.map(|i| attrs.remove(i).1))
-            }
+            NodeData::Element { attrs, .. } => { let pos = attrs.iter().position(|(n, _)| attr_name(n) == name); Ok(pos.map(|i| attrs.remove(i).1)) }
             _ => Err(DomError::NotAnElement),
         }
     }
@@ -187,11 +174,7 @@ impl Dom {
     /// Rename an element in place, keeping its attributes and children.
     pub fn rename(&mut self, id: NodeId, name: &str) -> Result<(), DomError> {
         match &mut self.nodes[id].data {
-            NodeData::Element { name: n, .. } => {
-                *n = QualName::new(None, ns!(html), LocalName::from(name));
-                Ok(())
-            }
-            _ => Err(DomError::NotAnElement),
+            NodeData::Element { name: n, .. } => { *n = QualName::new(None, ns!(html), LocalName::from(name)); Ok(()) } _ => Err(DomError::NotAnElement)
         }
     }
 
@@ -200,11 +183,7 @@ impl Dom {
     /// Replace the contents of a text or comment node.
     pub fn set_text(&mut self, id: NodeId, text: &str) -> Result<(), DomError> {
         match &mut self.nodes[id].data {
-            NodeData::Text { contents } | NodeData::Comment { contents } => {
-                *contents = text.to_string();
-                Ok(())
-            }
-            _ => Err(DomError::NotTextual),
+            NodeData::Text { contents } | NodeData::Comment { contents } => { *contents = text.to_string(); Ok(()) } _ => Err(DomError::NotTextual)
         }
     }
 
@@ -214,7 +193,10 @@ impl Dom {
     pub fn detach(&mut self, id: NodeId) { if let Some(p) = self.nodes[id].parent.take() { self.nodes[p].children.retain(|&c| c != id); } }
 
     fn is_ancestor(&self, maybe_ancestor: NodeId, mut node: NodeId) -> bool {
-        loop { if node == maybe_ancestor { return true; } match self.nodes[node].parent { Some(p) => node = p, None => return false } }
+        loop {
+            if node == maybe_ancestor { return true; }
+            match self.nodes[node].parent { Some(p) => node = p, None => return false }
+        }
     }
 
     /// The ids an insertion of `child` will actually splice in: a document
@@ -245,8 +227,7 @@ impl Dom {
         if self.is_ancestor(child, parent) && !matches!(self.nodes[child].data, NodeData::Document) { return Err(DomError::WouldCycle); }
         let ids = self.splice_ids(child);
         let index = match reference {
-            None => self.nodes[parent].children.len(),
-            Some(r) => self.nodes[parent].children.iter().position(|&c| c == r).ok_or(DomError::NotAChild)?,
+            None => self.nodes[parent].children.len(), Some(r) => self.nodes[parent].children.iter().position(|&c| c == r).ok_or(DomError::NotAChild)?
         };
         self.insert_ids(parent, index, &ids);
         Ok(())
@@ -265,9 +246,7 @@ impl Dom {
     pub fn unwrap(&mut self, id: NodeId) -> Result<(), DomError> {
         let parent = self.nodes[id].parent.ok_or(DomError::NotAChild)?;
         let content = match &self.nodes[id].data {
-            NodeData::Element { template_contents: Some(t), .. } => *t,
-            NodeData::Element { .. } => id,
-            _ => return Err(DomError::NotAnElement),
+            NodeData::Element { template_contents: Some(t), .. } => *t, NodeData::Element { .. } => id, _ => return Err(DomError::NotAnElement)
         };
         for child in self.nodes[content].children.clone() { self.insert_before(parent, child, Some(id))?; }
         self.detach(id);
@@ -348,10 +327,7 @@ impl Sink {
         {
             let mut nodes = self.nodes.borrow_mut();
             if let Some(&last) = nodes[parent].children.last() {
-                if let NodeData::Text { contents } = &mut nodes[last].data {
-                    contents.push_str(text);
-                    return;
-                }
+                if let NodeData::Text { contents } = &mut nodes[last].data { contents.push_str(text); return; }
             }
         }
         let id = self.push(NodeData::Text { contents: text.to_string() });
@@ -435,8 +411,7 @@ impl TreeSink for Sink {
 
     fn get_template_contents(&self, target: &NodeId) -> NodeId {
         match self.nodes.borrow()[*target].data {
-            NodeData::Element { template_contents: Some(t), .. } => t,
-            _ => panic!("get_template_contents called on a non-template node"),
+            NodeData::Element { template_contents: Some(t), .. } => t, _ => panic!("get_template_contents called on a non-template node")
         }
     }
 
@@ -452,10 +427,7 @@ impl TreeSink for Sink {
                     let mut nodes = self.nodes.borrow_mut();
                     if index > 0 {
                         let prev = nodes[parent].children[index - 1];
-                        if let NodeData::Text { contents } = &mut nodes[prev].data {
-                            contents.push_str(&text);
-                            return;
-                        }
+                        if let NodeData::Text { contents } = &mut nodes[prev].data { contents.push_str(&text); return; }
                     }
                 }
                 let id = self.push(NodeData::Text { contents: text.to_string() });

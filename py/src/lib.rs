@@ -41,30 +41,16 @@ pub struct Document;
 
 /// Wrap `id` in the concrete class matching its node kind.
 fn make_node(py: Python<'_>, dom: Arc<RwLock<Dom>>, id: NodeId) -> PyResult<Py<PyAny>> {
-    enum Kind {
-        Doc,
-        El,
-        Text,
-        Comment,
-        Doctype,
-        Other,
-    }
+    enum Kind { Doc, El, Text, Comment, Doctype, Other }
     let kind = match &dom.read().unwrap().get(id).data {
-        NodeData::Document => Kind::Doc,
-        NodeData::Element { .. } => Kind::El,
-        NodeData::Text { .. } => Kind::Text,
-        NodeData::Comment { .. } => Kind::Comment,
-        NodeData::Doctype { .. } => Kind::Doctype,
-        NodeData::ProcessingInstruction { .. } => Kind::Other,
+        NodeData::Document => Kind::Doc, NodeData::Element { .. } => Kind::El, NodeData::Text { .. } => Kind::Text, NodeData::Comment { .. } => Kind::Comment,
+        NodeData::Doctype { .. } => Kind::Doctype, NodeData::ProcessingInstruction { .. } => Kind::Other
     };
     let init = PyClassInitializer::from(Node { dom, id });
     Ok(match kind {
-        Kind::Doc => Py::new(py, init.add_subclass(Document))?.into_any(),
-        Kind::El => Py::new(py, init.add_subclass(Element))?.into_any(),
-        Kind::Text => Py::new(py, init.add_subclass(Text))?.into_any(),
-        Kind::Comment => Py::new(py, init.add_subclass(Comment))?.into_any(),
-        Kind::Doctype => Py::new(py, init.add_subclass(Doctype))?.into_any(),
-        Kind::Other => Py::new(py, init)?.into_any(),
+        Kind::Doc => Py::new(py, init.add_subclass(Document))?.into_any(), Kind::El => Py::new(py, init.add_subclass(Element))?.into_any(),
+        Kind::Text => Py::new(py, init.add_subclass(Text))?.into_any(), Kind::Comment => Py::new(py, init.add_subclass(Comment))?.into_any(),
+        Kind::Doctype => Py::new(py, init.add_subclass(Doctype))?.into_any(), Kind::Other => Py::new(py, init)?.into_any()
     })
 }
 
@@ -72,10 +58,7 @@ fn make_node(py: Python<'_>, dom: Arc<RwLock<Dom>>, id: NodeId) -> PyResult<Py<P
 fn preview(s: &str) -> String {
     let mut out = String::new();
     for (i, c) in s.chars().enumerate() {
-        if i == 30 {
-            out.push('…');
-            break;
-        }
+        if i == 30 { out.push('…'); break; }
         out.extend(c.escape_debug());
     }
     format!("'{out}'")
@@ -85,7 +68,8 @@ impl Node {
     /// The other node's id in self's arena, importing a deep copy when the
     /// two handles belong to different trees.
     fn local_id(&self, other: &Node) -> NodeId {
-        if Arc::ptr_eq(&self.dom, &other.dom) { other.id } else { let foreign = other.dom.read().unwrap(); self.dom.write().unwrap().import(&foreign, other.id) }
+        if Arc::ptr_eq(&self.dom, &other.dom) { other.id }
+        else { let foreign = other.dom.read().unwrap(); self.dom.write().unwrap().import(&foreign, other.id) }
     }
 }
 
@@ -102,12 +86,9 @@ impl Node {
     #[getter]
     fn name(&self) -> String {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Document => "#document".into(),
-            NodeData::Doctype { .. } => "#doctype".into(),
-            NodeData::Text { .. } => "#text".into(),
-            NodeData::Comment { .. } => "#comment".into(),
-            NodeData::ProcessingInstruction { .. } => "#pi".into(),
-            NodeData::Element { name, .. } => name.local.to_string(),
+            NodeData::Document => "#document".into(), NodeData::Doctype { .. } => "#doctype".into(), NodeData::Text { .. } => "#text".into(),
+            NodeData::Comment { .. } => "#comment".into(), NodeData::ProcessingInstruction { .. } => "#pi".into(),
+            NodeData::Element { name, .. } => name.local.to_string()
         }
     }
 
@@ -127,8 +108,7 @@ impl Node {
     #[getter]
     fn namespace(&self) -> Option<String> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { name, .. } if *name.ns != *"http://www.w3.org/1999/xhtml" => Some(name.ns.to_string()),
-            _ => None,
+            NodeData::Element { name, .. } if *name.ns != *"http://www.w3.org/1999/xhtml" => Some(name.ns.to_string()), _ => None
         }
     }
 
@@ -230,23 +210,15 @@ impl Node {
 
     fn __repr__(&self) -> String {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Document => "<Document>".into(),
-            NodeData::Element { name, .. } => format!("<Element {}>", name.local),
+            NodeData::Document => "<Document>".into(), NodeData::Element { name, .. } => format!("<Element {}>", name.local),
             NodeData::Text { contents } => format!("<Text {}>", preview(contents)),
-            NodeData::Comment { contents } => format!("<Comment {}>", preview(contents)),
-            NodeData::Doctype { name, .. } => format!("<Doctype {name}>"),
-            NodeData::ProcessingInstruction { .. } => "<Node #pi>".into(),
+            NodeData::Comment { contents } => format!("<Comment {}>", preview(contents)), NodeData::Doctype { name, .. } => format!("<Doctype {name}>"),
+            NodeData::ProcessingInstruction { .. } => "<Node #pi>".into()
         }
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
-        match other.cast::<Node>() {
-            Ok(o) => {
-                let o: &Node = o.get();
-                Arc::ptr_eq(&self.dom, &o.dom) && self.id == o.id
-            }
-            Err(_) => false,
-        }
+        match other.cast::<Node>() { Ok(o) => { let o: &Node = o.get(); Arc::ptr_eq(&self.dom, &o.dom) && self.id == o.id } Err(_) => false }
     }
 }
 
@@ -320,8 +292,7 @@ impl Attrs {
 
     fn keys(&self) -> Vec<String> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, _)| attr_name(n).into_owned()).collect(),
-            _ => Vec::new(),
+            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, _)| attr_name(n).into_owned()).collect(), _ => Vec::new()
         }
     }
 
@@ -331,25 +302,22 @@ impl Attrs {
 
     fn items(&self) -> Vec<(String, String)> {
         match &self.dom.read().unwrap().get(self.id).data {
-            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, v)| (attr_name(n).into_owned(), v.clone())).collect(),
-            _ => Vec::new(),
+            NodeData::Element { attrs, .. } => attrs.iter().map(|(n, v)| (attr_name(n).into_owned(), v.clone())).collect(), _ => Vec::new()
         }
     }
 
     #[pyo3(signature = (key, default=None))]
     fn get(&self, py: Python<'_>, key: &str, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         match self.dom.read().unwrap().attr(self.id, key) {
-            Some(v) => Ok(v.into_pyobject(py)?.into_any().unbind()),
-            None => Ok(default.unwrap_or_else(|| py.None())),
+            Some(v) => Ok(v.into_pyobject(py)?.into_any().unbind()), None => Ok(default.unwrap_or_else(|| py.None()))
         }
     }
 
     #[pyo3(signature = (key, *default))]
     fn pop(&self, py: Python<'_>, key: &str, default: &Bound<'_, PyTuple>) -> PyResult<Py<PyAny>> {
         match self.dom.write().unwrap().remove_attr(self.id, key).map_err(py_error)? {
-            Some(v) => Ok(v.into_pyobject(py)?.into_any().unbind()),
-            None if default.is_empty() => Err(PyKeyError::new_err(key.to_string())),
-            None => Ok(default.get_item(0)?.unbind()),
+            Some(v) => Ok(v.into_pyobject(py)?.into_any().unbind()), None if default.is_empty() => Err(PyKeyError::new_err(key.to_string())),
+            None => Ok(default.get_item(0)?.unbind())
         }
     }
 

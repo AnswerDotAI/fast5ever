@@ -19,6 +19,8 @@ categories = ["parser-implementations", "web-programming"]
 
 [lib]
 name = "fast5ever"
+test = false
+doctest = false
 
 [dependencies]
 html5ever = "0.39.0"

@@ -1,10 +1,8 @@
 from fastcore.basics import NotStr
 from fastcore.xml import attrmap, mk_getattr
 
-from ._core import Attrs, Comment, Doctype, Document, Element, Node, Text, __version__, parse, parse_fragment
-
-__all__ = ["__version__", "parse", "parse_fragment", "Node", "Document", "Element", "Text", "Comment", "Doctype", "Attrs"]
-
+from .core import *
+from .core import __all__, __version__
 
 def _element(tag, *children, **attrs):
     el = Element(tag, {attrmap(k): v for k, v in attrs.items()})

@@ -14,29 +14,29 @@ fn py_error(e: DomError) -> PyErr { PyValueError::new_err(e.to_string()) }
 /// The base node handle: every node is an instance of one of the concrete
 /// classes below (`isinstance(n, Node)` matches any kind). Handles stay
 /// valid however the tree is mutated.
-#[pyclass(frozen, subclass, module = "fast5ever")]
+#[pyclass(frozen, subclass, module = "fast5ever.core")]
 pub struct Node { dom: Arc<RwLock<Dom>>, id: NodeId }
 
 /// An element. `Element(name, attrs=None)` creates a detached element to
 /// insert into a tree.
-#[pyclass(frozen, extends = Node, module = "fast5ever")]
+#[pyclass(frozen, extends = Node, module = "fast5ever.core")]
 pub struct Element;
 
 /// A text node. `Text(text)` creates a detached one.
-#[pyclass(frozen, extends = Node, module = "fast5ever")]
+#[pyclass(frozen, extends = Node, module = "fast5ever.core")]
 pub struct Text;
 
 /// A comment node. `Comment(text)` creates a detached one.
-#[pyclass(frozen, extends = Node, module = "fast5ever")]
+#[pyclass(frozen, extends = Node, module = "fast5ever.core")]
 pub struct Comment;
 
 /// A doctype node.
-#[pyclass(frozen, extends = Node, module = "fast5ever")]
+#[pyclass(frozen, extends = Node, module = "fast5ever.core")]
 pub struct Doctype;
 
 /// The root of a parsed document or fragment. Inserting one into another
 /// tree splices its children in (DocumentFragment semantics).
-#[pyclass(frozen, extends = Node, module = "fast5ever")]
+#[pyclass(frozen, extends = Node, module = "fast5ever.core")]
 pub struct Document;
 
 /// Wrap `id` in the concrete class matching its node kind.
@@ -261,7 +261,7 @@ impl Comment {
 /// it is, and writes go straight to it. Compares equal to any mapping with
 /// the same items; `dict(attrs)` takes a snapshot. Keys are qualified names
 /// (`href` and `xlink:href` are distinct), not just local names.
-#[pyclass(frozen, module = "fast5ever")]
+#[pyclass(frozen, module = "fast5ever.core")]
 pub struct Attrs { dom: Arc<RwLock<Dom>>, id: NodeId }
 
 impl Attrs {
@@ -355,7 +355,7 @@ fn parse_fragment(py: Python<'_>, html: &str, context: &str) -> PyResult<Py<Docu
 }
 
 #[pymodule]
-fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Node>()?;
     m.add_class::<Document>()?;
     m.add_class::<Element>()?;

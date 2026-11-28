@@ -7,7 +7,7 @@ name = "fast5ever"
 dynamic = ["version"]
 description = "WHATWG-compliant HTML parsing, mutation, and serialization for Python, powered by Rust's html5ever"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 authors = [{name = "Jeremy Howard", email = "github@jhoward.fastmail.fm"}]
 dependencies = ["fastcore>=2.2.14"]
@@ -25,10 +25,11 @@ Homepage = "https://github.com/AnswerDotAI/fast5ever"
 Repository = "https://github.com/AnswerDotAI/fast5ever"
 Issues = "https://github.com/AnswerDotAI/fast5ever/issues"
 
+Documentation = "https://AnswerDotAI.github.io/fast5ever/"
 [tool.maturin]
 manifest-path = "py/Cargo.toml"
 python-source = "python"
-module-name = "fast5ever._core"
+module-name = "fast5ever.core"
 
 [tool.fastship]
 branch = "main"
